@@ -1,0 +1,26 @@
+services:
+- type: web
+  name: ShipTeo
+  env: python
+  plan: starter
+  buildCommand: ./build.sh
+  startCommand: gunicorn MerchManagerV1.wsgi
+  autoDeploy: false
+  envVars:
+    - key: WEB_CONCURRENCY
+      value: 4
+    - key: DATABASE_URL
+      fromDatabase:
+        name: ShipTeo
+        property: connectionString
+    - key: DJANGO_SECRET_KEY
+      generateValue: true
+    - key: DJANGO_ADMIN_URL
+      generateValue: true
+    - key: DJANGO_SETTINGS_MODULE
+      value: config.settings.production
+
+databases:
+- name: ShipTeo
+  databaseName: django
+  user: django

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+         {% block content %}
+             {% if latest_list %}
+                 {% for merch in latest_list %}
+<table>
+  <tr>
+    <th>Store: {{ merch.store }}</th>
+    <th>Date: {{ merch.date }}</th>
+    <th>OOS: {{ merch.OOS.count }}</th>
+    <th>Cases Count: {{ merch.worked_cases.count }}</th>
+  </tr>
+</table>
+                 {% endfor %}
+             {% else %}
+                 <p>No merch are available.</p>
+             {% endif %}
+        {% endblock content %}
+</body>
+</html>

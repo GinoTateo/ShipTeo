@@ -1,0 +1,29 @@
+<script type="text/javascript">
+
+    function acceptMerchRequest(merch_request_id, uiUpfateFunction){
+        var url = "{%  url 'accept_request' merch_request_id=8437284823472384 %}".replace("8437284823472384"), merch_request_id)
+        $.ajax({
+            type:"GET",
+            dataType: "json",
+            url: url,
+            timeout: 5000,
+            success: function (data){
+                if(data.response == "Merch request accepted."){
+
+                }
+                else if(data.response != null){
+                    alert(data.response)
+                }
+            },
+            error: function (data){
+                alert("Something went wrong " + data)
+            },
+            complete: function (data){
+                uiUpfateFunction
+            },
+        })
+    }
+
+
+
+</script>

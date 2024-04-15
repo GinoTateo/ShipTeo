@@ -1,0 +1,50 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+    <title>Order Status</title>
+  </head>
+
+  <body>
+  {% include 'navbar.html' %}
+  {% block content %}
+
+    <main class="container my-4 ">
+    <div class="row">
+        <div class="col-md-12">
+
+        <a type="button" onclick="history.back()" class="btn btn-secondary mb-3">Back</a>
+
+        {% if orders %}
+            {% for order in orders %}
+
+                <div class="card mb-3 text-center text-white">
+                    <div class="card-body card-back">
+                      <h4 class="card-title">Order: {{ order.id }}</h4>
+                      <h6 class="card-text">Route: {{ order.route }} </h6>
+                      <h6 class="card-text">Quantity: {{ order.items.count }} </h6>
+                      <h6 class="card-text">Status: {{ order.status }}</h6>
+{#                    <p class="card-text">{{ order.start_date }}</p>#}
+{#                    <p class="card-text">{{ order.ship_date }}</p>#}
+                        <a type="button" href="/ops/warehouse/order-status-view/{{ order.id }}/" class="btn btn-outline-light my-1">View Order</a>
+                    </div>
+{#                    <a type="button" href="/ops/warehouse/order-status-view/{{ order.id }}/" class="btn bg-success">View Order</a>#}
+                </div>
+
+            {% endfor %}
+        {% endif %}
+
+      </div>
+    </div>
+
+  </main>
+{% endblock content %}
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Orders</title>
+    <link rel="stylesheet" href="https://ginotateo.github.io/ShipTeo_Style/main.css">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <style>
+        .container {max-width: 1200px; margin: auto; padding: 20px;}
+        .card {border: none; box-shadow: 0 0 15px rgba(0, 0, 0, 0.1); border-radius: 10px; padding: 20px; margin-bottom: 20px; transition: transform 0.3s ease;}
+        .card:hover {transform: translateY(-5px);}
+        .card h2 {margin-top: 0; color: #007bff;}
+        .button {display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; transition: background-color 0.2s;}
+        .button:hover {background-color: #0056b3;}
+        .status-complete {color: green;}
+        .status-pending {color: darkorange;}
+        .status-preparing {color: dodgerblue;}
+        .filter-section {margin-bottom: 20px; padding: 20px; background-color: #f8f9fa; border-radius: 10px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);}
+        .filter-form .btn-primary {padding: 10px 20px; font-weight: bold;}
+    </style>
+</head>
+<body>
+    {% include 'navbar.html' %}
+    {% block content %}
+    <div class="container">
+        <h1>Orders Overview</h1>
+        <div class="filter-section mb-5">
+            <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#filterFormCollapse" aria-expanded="false" aria-controls="filterFormCollapse">Filters</button>
+            <div class="collapse" id="filterFormCollapse">
+                <form action="" method="get" class="filter-form p-4">
+                    <fieldset>
+                        <div class="form-group font-weight-bold">
+                            <label for="date">Date:</label>
+                            <input type="date" id="date" name="date" class="form-control">
+                        </div>
+                        <div class="form-group font-weight-bold">
+                            <label for="status">Status:</label>
+                            <select id="status" name="status" class="form-control">
+                                <option value="Preparing">Preparing</option>
+                                <option value="Complete">Complete</option>
+                                <option value="Pending">Pending</option>
+                            </select>
+                        </div>
+                        <div class="form-group font-weight-bold">
+                            <label for="route">Route:</label>
+                            <select id="route" name="route" class="form-control">
+                                <option value="">Select Route</option>
+                                {% for route in routes %}
+                                <option value="{{ route }}">{{ route }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <input type="submit" value="Filter" class="btn btn-primary">
+                    </fieldset>
+                </form>
+            </div>
+        </div>
+        <div class="row">
+            {% for order in orders %}
+            <article class="card mb-3">
+                <h2>{{ order.route }} {{ order.date|date:"Y-m-d" }}</h2>
+                <div>
+                    <p>Order ID: {{ order.order_id }}</p>
+                    <p>Route Number: {{ order.route }} </p>
+                    <p>Date: {{ order.pick_up_date }}</p>
+                    <p>Total Items: {{ order.total_cases }}</p>
+                    <p>Status: <span class="{% if order.status == 'Complete' %}status-complete{% elif order.status == 'Preparing' %}status-preparing{% else %}status-pending{% endif %}">{{ order.status }}</span></p>
+                    <a href="{{ order.order_id }}/" class="btn btn-primary">View Details</a>
+                    {% if order.status == "Pending" %}
+                        <button type="button" class="btn btn-warning align-items-end" data-toggle="modal" data-target="#prepareOrderModal" data-order-id="{{ order.order_id }}">Prepare</button>
+                    {% elif order.status == "Preparing" %}
+                        <button type="button" class="btn btn-success complete-order align-items-end" data-order-id="{{ order.order_id }}">Complete</button>
+                    {% endif %}
+                </div>
+            </article>
+
+
+
+        <div class="modal fade" id="prepareOrderModal" tabindex="-1" role="dialog" aria-labelledby="prepareOrderModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="prepareOrderModalLabel">Select Order Builder</h5>
+                    <button type="button" class="close btn-lg" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true" class="text-white">&times;</span>
+                    </button>
+                </div>
+                <form action="" method="post" class="p-4">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label for="builder_name" class="font-weight-bold">Select Order Builder:</label>
+                        <select name="builder_name" id="builder_name" class="form-control">
+                            <option value="Lonnie">Lonnie</option>
+                            <option value="Ramon">Ramon</option>
+                            <option value="Gino">Gino</option>
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-lg" data-dismiss="modal">Close</button>
+                        <button type="button" id="pdfButton" class="btn btn-warning btn-lg">PDF</button>
+                        <button type="button" id="confirmButton" class="btn btn-success btn-lg" data-order-id="{{ order.order_id }}" >Confirm</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+
+
+            {% endfor %}
+        </div>
+    </div>
+
+
+    {% endblock %}
+</body>
+
+<script>
+$(document).ready(function() {
+
+    $('.btn-warning.align-items-end').on('click', function() {
+        var orderId = $(this).data('order-id'); // Get the order ID from the clicked button
+        $('#confirmButton').data('order-id', orderId); // Set it on the "Confirm" button
+    });
+
+    $('#confirmButton').click(function() {
+        var orderId = $(this).data('order-id'); // Retrieve the order ID
+        confirmPrepare(orderId); // Now this will have the correct order ID
+    });
+
+    $('#pdfButton').click(function(e) {
+        e.preventDefault();
+        openPDF();
+    });
+
+    var savedScrollPosition = sessionStorage.getItem('scrollPosition');
+    if (savedScrollPosition) {
+        window.scrollTo(0, parseInt(savedScrollPosition, 10));
+        sessionStorage.removeItem('scrollPosition');
+    }
+});
+
+$('.complete-order').click(function() {
+    var orderId = $(this).data('order-id');
+    console.log(orderId); // Check if this logs the correct order ID
+    saveScrollAndReload(orderId)
+});
+
+function saveScrollAndReload(orderId) {
+    var scrollPosition = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    sessionStorage.setItem('scrollPosition', scrollPosition.toString());
+
+            var button = $(this); // Button reference for use in callbacks
+            var scrollPosition = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            sessionStorage.setItem('scrollPosition', scrollPosition.toString());
+
+            $.ajax({
+                url: '/ops/warehouse/order/' + orderId + '/complete/',
+                type: 'POST',
+                data: {'order_id': orderId, 'csrfmiddlewaretoken': $('input[name="csrfmiddlewaretoken"]').val()},
+                headers: {'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')},
+                success: function (response) {
+                    button.closest('article').find('.status-pending, .status-preparing').removeClass('status-pending status-preparing').addClass('status-complete').text('Complete');
+                    button.remove(); // Remove the "Complete" button after the status update
+                    window.location.reload(); // Reload the page after status update
+                },
+                error: function (xhr, status, error) {
+                    console.error('Error completing order:', error);
+                    alert('Could not complete the order. Please try again.');
+                }
+            });
+}
+
+
+function confirmPrepare(orderId) {
+      var selectedBuilder = $('#builder_name').val();
+        console.log("Confirming order:", orderId, "with builder:", selectedBuilder);
+
+
+            console.log(orderId)
+
+            // Save current scroll position before sending the AJAX request
+            var scrollPosition = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            sessionStorage.setItem('scrollPosition', scrollPosition.toString());
+
+            $.ajax({
+                url: `/ops/api/update-builder/${orderId}/`, // Your API endpoint to update the builder
+                type: 'POST',
+                data: {
+                    builder_name: selectedBuilder,
+                    csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken"]').val()
+                },
+                headers: {
+                    'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function (response) {
+                    console.log('Builder updated successfully');
+                    // Reload the page after a successful AJAX call
+                    window.location.reload();
+                },
+                error: function (xhr, status, error) {
+                    console.error('Error updating builder:', error);
+                }
+            });
+}
+
+function openPDF() {
+    // Open the PDF in a new tab
+    var modal = $('#prepareOrderModal');
+    var orderId = modal.data('order-id');
+    var pdfUrl = `/ops/warehouse/order/${orderId}/pdf/`;
+    window.open(pdfUrl, '_blank');
+}
+</script>
+</html>

@@ -1,0 +1,70 @@
+
+
+{
+    "user": 1,
+    "store": 7,
+    "OOS": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+    ],
+    "worked_cases": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+    ],
+    "date": "2023-01-27"
+}
+
+{
+"name": "Safeway",
+"number": "1414",
+"City": "Oakland",
+"RSRrt": "1414",
+"Area": "Oakland",
+"receiver_name": "John",
+"receiver_open":"6",
+"receiver_close": "12",
+"receive_type": "DEX",
+"weekly_average": "4000",
+"Address": "1212 lane",
+"BS_Location": "Roof",
+"displays":"1",
+"merchandiser": "1"
+}
+
+ {
+   "user": 1,
+    "store_list": [
+        1,
+        3,
+        4,
+        5,
+        23,
+        24,
+        25,
+        26,
+        27
+    ],
+    "date": "2023-01-26",
+    "completed": true
+}
+
+{
+"username": "tateogino@gmail.com",
+"password": "January114!"
+}

@@ -1,0 +1,133 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="{% static 'Scripts/jquery-3.6.3.min.js' %}"></script>
+    <link rel="stylesheet" type="text/css" src="{% static 'css/main.css' %}"/>
+    <title>Order Form</title>
+  </head>
+
+      <style>
+      .grad {
+                background-image: linear-gradient(#659999,#f4791f);
+                background-repeat: no-repeat;
+          text-align:center;
+                {#height: 100vh;#}
+            }
+    </style>
+
+<body class="grad">
+    {% block content %}
+
+        <div >
+            <h1 class="jumbotron text-justify" > Order Form </h1>
+        </div>
+
+{#    <form method="get">#}
+{#        <div class="justify-content-center">#}
+{#            <p>#}
+{#              <button class="btn btn-outline-dark " type="button" data-bs-toggle="collapse" data-bs-target="#filter" aria-expanded="false" aria-controls="collapseExample">#}
+{#                  Filters#}
+{#              </button>#}
+{#             </p>#}
+{#            <div class="collapse" id="filter">#}
+{#              <div class="card card-body">#}
+{#                  {{ filter.form.as_p }}#}
+{#                  <input class="btn btn-primary float-left" type="submit" />#}
+{#              </div>#}
+{#            </div>#}
+{#        </div>#}
+{#    </form>#}
+
+        <p>
+    <button class="btn btn-outline-dark" type="button" data-bs-toggle="collapse" data-bs-target="#items" aria-expanded="false" aria-controls="collapseExample">
+    Items
+    </button>
+    </p>
+    <div class="collapse" id="items">
+        <main>
+          <form method="post" class="text-center mb-4">{% csrf_token %}
+            <div style="display: flex; flex-direction: row; flex-wrap: wrap">
+              {% for item in items %}
+                <div class="card" style="width: 19rem; margin: 10px">
+                  <div class="view overlay">
+                    <a href="{{ item.get_absolute_url }}">
+                      <div class="mask rgba-white-slight"></div>
+                    </a>
+                  </div>
+                  <div class="card-body text-center">
+                    <a href="" class="grey-text">
+                      <h5>{{ item.get_category_display}}</h5>
+                    </a>
+                    <h5>
+                        <a href="{{ item.get_absolute_url }}" class="dark-grey-text">{{ item.item_brand }}{{ item.item_type }} {{ item.item_name }} {{ item.item_size }}
+                          <span class="badge badge-pill {% if item.get_label_display == 'New' %} danger-color {% else %} primary-color {% endif %}">{{ item.get_label_display }}</span>
+                        </a>
+                    </h5>
+                      <p><strong id="id_order_order_{{item.id}}" >Amount</strong></p>
+                      <ul id="numpad{{ item.id }}" class="pagination justify-content-center pg-blue ">
+
+                          <li class="page-item {{ item.id }}">
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-success" onclick='triggerOrderItem("{{item.id}}","1", "{{ store.id }}","{{ current_merch.id }}")'>1</button>
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-success" onclick='triggerOrderItem("{{item.id}}","2", "{{ store.id }}","{{ current_merch.id }}")'>2</button>
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-success" onclick='triggerOrderItem("{{item.id}}","3","{{ store.id }}","{{ current_merch.id }}")'>3</button>
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-success" onclick='triggerOrderItem("{{item.id}}","4","{{ store.id }}","{{ current_merch.id }}")'>4</button>
+                              <button id="id_order_{{itemid}}" type='button' class="btn btn-outline-success" onclick='triggerOrderItem("{{item.id}}","5","{{ store.id }}","{{ current_merch.id }}")'>5</button>
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-success" onclick='triggerOrderItem("{{item.id}}","6","{{ store.id }}","{{ current_merch.id }}")'>6</button>
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-success" onclick='triggerOrderItem("{{item.id}}","7","{{ store.id }}","{{ current_merch.id }}")'>7</button>
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-success" onclick='triggerOrderItem("{{item.id}}","8","{{ store.id }}","{{ current_merch.id }}")'>8</button>
+                          </li>
+
+                      </ul>
+                      <ul id="id_order_edit_{{ item.id }}" hidden class="pagination justify-content-center pg-blue">
+
+                          <li class="page-item">
+                              <button  type='button' class="btn btn-outline-success" onclick='triggerUnhide("{{item.id}}")'>Edit</button>
+                          </li>
+
+                      </ul>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </form>
+        <div class="mask rgba-black-strong d-flex justify-content-center align-items-center">
+        </div>
+      </main>
+    </div>
+
+</body>
+
+<script type="text/javascript">
+
+    function onOrderItem() {
+    }
+
+	function triggerOrderItem(item_id, quantity_id, store_id,merch_id){
+        orderItem(item_id, quantity_id, store_id, merch_id, onOrderItem)
+        console.log(quantity_id)
+
+        let element = document.getElementById("numpad"+item_id);
+        element.setAttribute("hidden", "hidden");
+
+        let value = document.getElementById('id_order_'+item_id);
+        value.setAttribute('value', quantity_id);
+
+        document.getElementById("id_order_order_"+item_id).innerHTML = quantity_id;
+
+        document.getElementById("id_order_edit_"+item_id).removeAttribute("hidden");
+	}
+
+    function triggerUnhide(item_id){
+       document.getElementById(item_id).removeAttribute("hidden");
+       let element = document.getElementById('id_edit_'+item_id);
+        element.setAttribute("hidden", "hidden");
+    }
+
+</script>
+    {% include 'merch/snippets/Merch_form.html' %}
+</html>
+{% endblock content %}

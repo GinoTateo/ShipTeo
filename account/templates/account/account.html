@@ -1,0 +1,54 @@
+{% extends 'navbar.html' %}
+{% load static %}
+
+{% block content %}
+
+<style>
+    .grad {
+        background-image: linear-gradient(#659999,#f4791f);
+        background-repeat: no-repeat;
+        min-height: 1000px;
+    }
+	.card{
+		border-radius: 12px;
+	}
+</style>
+<body class="grad">
+    <div class="container-fluid">
+        <div class="d-flex flex-row justify-content-center flex-wrap align-items-start">
+
+            <div class="card profile-card m-2">
+              <div class="card-body">
+                <div class="d-flex flex-column justify-content-center p-4">
+                    <div>
+                        <h5>{{ title }}</h5>
+                    </div>
+                    <p class="mt-4 mb-1 field-heading">Email</p>
+                    {%  if is_self %}
+                        <h5>{{email}}</h5>
+                    {% else %}
+                        {% if hide_email %}
+                            <h5>**********</h5>
+                        {% else %}
+                            <h5>{{email}}</h5>
+                        {% endif %}
+                    {% endif %}
+                    <p class="mt-4 mb-1 field-heading">Username</p>
+                    <h5>{{username}}</h5>
+
+                    <!-- If Auth user is viewing their own profile -->
+                    {% if is_self %}
+                    <a  class="mt-4 btn btn-primary" href="{% url 'account:edit' user_id=id %}">Update</a>
+    {#				<div class="d-flex flex-column mt-4">#}
+    {#					<a class="m-auto" href="{% url 'account:password_change' %}">Change password</a>#}
+    {#				</div>#}
+                    {% endif %}
+                </div>
+              </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+
+{% endblock content %}

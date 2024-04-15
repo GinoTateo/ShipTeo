@@ -1,0 +1,30 @@
+{% load static %}
+<script src="{% static 'Scripts/jquery-3.6.3.min.js' %}"></script>
+<script type="text/javascript">
+	function acceptMerchRequest(request_id, uiUpdateFunction){
+		var url = "{% url 'merch:accept-merch-request' 53252623623632623 %}".replace("53252623623632623", request_id)
+		$.ajax({
+			type: 'GET',
+			dataType: "json",
+			url: url,
+			timeout: 5000,
+			success: function(data) {
+				console.log("SUCCESS", data)
+				if(data['response'] === "Merch request accepted."){
+					// ui is updated
+				}
+				else if(data['response'] != null){
+					alert(data['response'])
+				}
+			},
+            error: function(data){
+                console.log("Error", data['response'])
+            },
+			complete: function(data){
+				uiUpdateFunction()
+			}
+		});
+	}
+
+
+</script>

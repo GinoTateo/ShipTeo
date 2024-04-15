@@ -1,0 +1,115 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.6.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://ginotateo.github.io/ShipTeo_Style/main.css">
+    <title>Dashboard</title>
+
+    <style>
+        .oos-indicator {
+            color: red;
+            font-weight: bold;
+        }
+        .card-header-custom {
+            background-color: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+{% include 'navbar.html' %}
+{% block content %}
+<main class="container my-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+
+        <a href="/ops/warehouse/order/{{ order.id }}" class="btn btn-danger my-2">Back</a>
+
+            <div class="card">
+                <h1 class="card-header text-center text-dark card-header-custom">
+                    Order and Transfer Verification
+                </h1>
+
+                <div class="card-body">
+                    {% if order %}
+                    <p class="card-text text-center">Verify the order details against the transfer records.</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="order-info">
+                                <h3>Order Information</h3>
+                                <p><strong>Route Number:</strong> {{ order.route }}</p>
+                                <p><strong>Date:</strong> {{ order.pick_up_date }}</p>
+                                <p><strong>Total Quantity Ordered:</strong> {{ order.total_cases }}</p>
+                                <p><strong>Transfer ID:</strong> {{ order.transfer_id }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="transfer-info">
+                                <h3>Transfer Information</h3>
+                                <p><strong>Destination Route:</strong> {{ matching_transfer.destination_route }}</p>
+                                <p><strong>Date:</strong> {{ matching_transfer.date }}</p>
+                                <p><strong>Primary Total:</strong> {{ matching_transfer.primary_total }}</p>
+                                <p><strong>Adjustments:</strong> {{ adjustments }}</p>
+                            </div>
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Item Number</th>
+                                    <th>Item Description</th>
+                                    <th>Order Quantity</th>
+                                    <th>Transfer Quantity</th>
+                                    <th>Variance</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in order_items %}
+                                <tr>
+                                {% if item.Unordered %}
+                                    <td> <span style="color: red;">{{ item.ItemNumber }}</span></td>
+                                {% else %}
+                                    <td>{{ item.ItemNumber }}</td>
+                                {% endif %}
+                                    <td>{{ item.ItemDescription }}</td>
+                                    <td>{{ item.OrderQuantity }}</td>
+                                    <td>{{ item.TransferQuantity }}</td>
+                                    <td>
+                                        {% if item.Variance is not 0 %}
+                                        <span style="color: red;">{{ item.Variance }}</span>
+                                        {% else %}
+
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.IsOOS %}
+                                        <span class="oos-indicator">Out of Stock</span>
+                                        {% else %}
+                                        In Stock
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center">No Variance Found</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Items Listing</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/5.1.0/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h2 class="mb-4">Items Listing</h2>
+        <!-- Items will be listed here -->
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/5.1.0/js/bootstrap.bundle.min.js"></script>
+</body>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th scope="col">#</th>
+            <th scope="col">Item Number</th>
+            <th scope="col">Description</th>
+            <th scope="col">Quantity</th>
+            <th scope="col">In Stock</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Dynamically insert rows here using your server-side template language -->
+        {% for item in items %}
+        <tr>
+            <th scope="row">{{ forloop.counter }}</th>
+            <td>{{ item.ItemNumber }}</td>
+            <td>{{ item.ItemDescription }}</td>
+            <td>{{ item.Quantity }}</td>
+            <td>{{ item.InStock }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</html>

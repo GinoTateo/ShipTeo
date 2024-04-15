@@ -1,0 +1,26 @@
+{% load static %}
+<script src="{% static 'Scripts/jquery-3.6.3.min.js' %}"></script>
+<script type="text/javascript">
+	function OOSItem(item_id, bool_val, store_id, merch_id){
+		var url = "{% url 'merch:add-to-oos' %}"
+        $.ajaxSetup({
+	        data: {csrfmiddlewaretoken: '{{ csrf_token }}'}
+        });
+		$.ajax({
+			type: 'POST',
+			dataType: "json",
+			url: url,
+			timeout: 5000,
+            data: {item_id: item_id, bool_val: bool_val, store_id: store_id, merch_id: merch_id},
+			success: function(data) {
+				console.log("SUCCESS", data)
+				if(data['response'] === "Item added to your cart"){
+					// ui is updated
+				}
+				else if(data['response'] != null){
+					alert(data['response'])
+				}
+			},
+		});
+	}
+</script>

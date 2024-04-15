@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pick List</title>
+    <!-- Bootstrap CSS for styling and components -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <!-- Bootstrap Bundle with Popper for dropdowns, modals, etc. -->
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+</head>
+
+<body>
+    {% include 'navbar.html' %}
+    <div class="container mt-5">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="card-title">{{ order.route }}</h2>
+                <h4 class="card-subtitle mb-2 text-muted">{{ order.pick_up_date|date:"F j, Y" }}</h4>
+                <!-- Order Details Section -->
+                <div class="mt-3">
+                    <p><strong>Total Cases:</strong> {{ order.total_cases }}</p>
+                    <p><strong>Pick-up Time:</strong> {{ order.pick_up_time }}</p>
+                    <p><strong>Status:</strong> {{ order.status }}</p>
+                    <p><strong>Order Builder:</strong> {{ order.builder_name|default:"Not Assigned" }}</p>
+                </div>
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="/ops/warehouse/order" class="btn btn-danger">Back</a>
+                    <div class="button-group">
+                        <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addItemModal">Add</button>
+                        <button id="editUpdateButton" type="button" class="btn btn-primary">Edit</button>
+                        <a href="pdf/" class="btn btn-primary">Print</a>
+                        <a href="verify/" class="btn btn-primary">Verify</a>
+                        {% if order.status == "Pending" %}
+                            <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#prepareOrderModal">Prepare</button>
+                        {% elif order.status == "Preparing" %}
+                            <a href="complete" class="btn btn-success">Complete</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <form id="orderForm" method="POST" action="update/" class="needs-validation" novalidate>
+            {% csrf_token %}
+            <div class="row">
+                {% for item in order.items %}
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ item.ItemDescription }}</h5>
+                            <p class="">{{ item.ItemNumber }}</p>
+                            <div class="form-group">
+                                <label>Quantity
+                                    <input type="number" class="form-control" name="items_{{ forloop.counter0 }}_Quantity" value="{{ item.Quantity }}" readonly>
+                                </label>
+                            </div>
+                            <!-- Add other fields as necessary -->
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </form>
+    </div>
+
+<div class="modal fade" id="prepareOrderModal" tabindex="-1" role="dialog" aria-labelledby="prepareOrderModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="prepareOrderModalLabel">Select Order Builder</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true" class="text-white">&times;</span>
+        </button>
+      </div>
+      <form action="prepare/" method="post" class="p-4">
+        {% csrf_token %}
+        <div class="form-group">
+          <label for="builder_name" class="font-weight-bold">Select Order Builder:</label>
+          <select name="builder_name" id="builder_name" class="form-control">
+            <!-- Populate with actual builder names -->
+            <option value="Lonnie">Lonnie</option>
+            <option value="Ramon">Ramon</option>
+              <option value="Gino">Gino</option>
+            <!-- Add more options here -->
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-success">Confirm</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- Modal -->
+<div class="modal fade" id="addItemModal" tabindex="-1" role="dialog" aria-labelledby="addItemModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="addItemModalLabel">Add Items</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true" class="text-white">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="addItemForm">
+            {% csrf_token %}
+            <div class="list-group">
+                {% for item in available_items %}
+                <div class="list-group-item flex-column align-items-start">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h5 class="mb-1">{{ item.Description }}</h5>
+                        <small>{{ item.ItemNumber }}</small>
+                    </div>
+                    <input type="number" class="form-control quantity-input" name="quantity_{{ item.ItemNumber }}" placeholder="Qty" min="1" data-item-number="{{ item.ItemNumber }}" data-item-description="{{ item.Description }}">
+                </div>
+                {% endfor %}
+            </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-success" id="confirmAddItems">Add Selected</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('editUpdateButton').addEventListener('click', function() {
+    var form = document.getElementById('orderForm');
+    var addItemsButton = document.querySelector('.btn-info[data-target="#addItemModal"]'); // Get the Add button
+    var isEditing = this.getAttribute('data-editing') !== 'true';
+
+    if (isEditing) {
+        // Enable editing
+        var quantityInputs = document.querySelectorAll('input[name^="items_"][name$="_Quantity"]');
+        quantityInputs.forEach(function(input) {
+            input.removeAttribute('readonly');
+            input.classList.add('editable');
+        });
+        this.textContent = 'Update'; // Change button text to "Update"
+        this.setAttribute('data-editing', 'true');
+        addItemsButton.style.display = 'inline-block'; // Show the Add button
+    } else {
+        // Submit form and switch out of edit mode
+        form.submit();
+        addItemsButton.style.display = 'none'; // Hide the Add button
+    }
+});
+
+document.getElementById('orderForm').addEventListener('submit', function() {
+    var quantityInputs = document.querySelectorAll('input[name^="items_"][name$="_Quantity"]');
+    quantityInputs.forEach(function(input) {
+        input.setAttribute('readonly', true);
+        input.classList.remove('editable');
+    });
+    var button = document.getElementById('editUpdateButton');
+    button.textContent = 'Edit'; // Change button text back to "Edit"
+    button.removeAttribute('data-editing');
+});
+</script>
+
+<script>
+document.getElementById('confirmAddItems').addEventListener('click', function() {
+    let itemsToAdd = [];
+    document.querySelectorAll('.quantity-input').forEach(function(input) {
+        let quantity = input.value;
+        let itemNumber = input.getAttribute('data-item-number');
+        let itemDescription = input.getAttribute('data-item-description');
+
+        if (quantity > 0) { // Check if the quantity is greater than 0
+            itemsToAdd.push({
+                itemNumber: itemNumber,
+                quantity: quantity,
+                description: itemDescription
+            });
+        }
+    });
+
+    if(itemsToAdd.length > 0) {
+        $.ajax({
+            url: "add/items/", // Ensure this URL is correct
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({selected_items: itemsToAdd}),
+            headers: {'X-CSRFToken': $('input[name="csrfmiddlewaretoken"]').val()},
+            success: function(response) {
+                $('#addItemModal').modal('hide');
+                window.location.reload();
+            },
+            error: function(xhr, status, error) {
+                console.error('Error adding items:', xhr.responseJSON.error);
+                // Handle error
+            }
+        });
+    } else {
+        alert('Please specify quantities for at least one item before adding.');
+    }
+});
+
+
+document.getElementById('confirmPrepare').addEventListener('click', function() {
+    var selectedBuilder = document.getElementById('orderBuilderSelect').value;
+
+    // Example: Logging the selected builder to the console
+    console.log('Selected Order Builder:', selectedBuilder);
+
+    // Here you can add AJAX call to update the order on the server side
+    // or submit the form with the selected builder
+    $('#prepareOrderModal').modal('hide'); // Close the modal after action
+});
+
+// Initial setup to hide the Add button if not in edit mode
+document.addEventListener('DOMContentLoaded', function() {
+    var isEditing = document.getElementById('editUpdateButton').getAttribute('data-editing') === 'true';
+    var addItemsButton = document.querySelector('.btn-info[data-target="#addItemModal"]');
+    if (!isEditing) {
+        addItemsButton.style.display = 'none';
+    }
+});
+
+</script>
+
+
+</body>
+</html>

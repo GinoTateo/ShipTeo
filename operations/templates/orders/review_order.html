@@ -1,0 +1,17 @@
+<!-- templates/orders/review_order.html -->
+{#{% extends "base.html" %}#}
+{% block content %}
+<div class="container">
+    <h2>Review Your Order</h2>
+    <form action="{% url 'ops:submit_order' %}" method="post">
+        {% csrf_token %}
+        {% for item in items %}
+        <li>
+            {{ item.get('Item Description', 'Default Description') }} - Quantity: {{ item.Quantity }}
+        </li>
+        {% endfor %}
+
+        <button type="submit" class="btn btn-primary">Submit Order</button>
+    </form>
+</div>
+{% endblock %}

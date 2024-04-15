@@ -1,0 +1,118 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="{% static 'Scripts/jquery-3.6.3.min.js' %}"></script>
+    <link rel="stylesheet" type="text/css" src="{% static 'css/main.css' %}"/>
+    <title>OOS Form</title>
+  </head>
+
+      <style>
+      .grad {
+                background-image: linear-gradient(#659999,#f4791f);
+                background-repeat: no-repeat;
+          text-align:center;
+                {#height: 100vh;#}
+            }
+    </style>
+
+<body class="grad">
+    {% block content %}
+
+        <div >
+            <h1 class="jumbotron text-justify" > Out of Stock </h1>
+        </div>
+
+{#    <form method="get">#}
+{#        <div class="justify-content-center">#}
+{#            <p>#}
+{#              <button class="btn btn-outline-dark " type="button" data-bs-toggle="collapse" data-bs-target="#filter" aria-expanded="false" aria-controls="collapseExample">#}
+{#                  Filters#}
+{#              </button>#}
+{#             </p>#}
+{#            <div class="collapse" id="filter">#}
+{#              <div class="card card-body">#}
+{#                  {{ filter.form.as_p }}#}
+{#                  <input class="btn btn-primary float-left" type="submit" />#}
+{#              </div>#}
+{#            </div>#}
+{#        </div>#}
+{#    </form>#}
+
+        <p>
+    <button class="btn btn-outline-dark" type="button" data-bs-toggle="collapse" data-bs-target="#oositems" aria-expanded="false" aria-controls="collapseExample">
+    Items
+    </button>
+    </p>
+    <div class="collapse" id="oositems">
+        <main>
+          <form method="post" class="text-center mb-4">{% csrf_token %}
+            <div style="display: flex; flex-direction: row; flex-wrap: wrap">
+              {% for item in items %}
+                <div class="card" style="width: 19rem; margin: 10px">
+                  <div class="view overlay">
+                    <a href="{{ item.get_absolute_url }}">
+                      <div class="mask rgba-white-slight"></div>
+                    </a>
+                  </div>
+                  <div class="card-body text-center">
+                    <a href="" class="grey-text">
+                      <h5>{{ item.get_category_display}}</h5>
+                    </a>
+                    <h5>
+                        <a href="{{ item.get_absolute_url }}" class="dark-grey-text">{{ item.item_brand }}{{ item.item_type }} {{ item.item_name }} {{ item.item_size }}
+                          <span class="badge badge-pill {% if item.get_label_display == 'New' %} danger-color {% else %} primary-color {% endif %}">{{ item.get_label_display }}</span>
+                        </a>
+                    </h5>
+
+                      <ul id="oos{{ item.id }}" class="pagination justify-content-center pg-blue ">
+
+                          <li class="page-item hide{{ item.id }}">
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-danger active" onclick='triggerOOSItem("{{item.id}}",true,"{{ store.id }}","{{ current_merch.id }}")'>OOS</button>
+                          </li>
+
+                      </ul>
+                      <ul id="oos{{ item.id }}" hidden class="pagination justify-content-center pg-blue">
+
+                          <li class="page-item">
+                              <button  type='button' class="btn btn-outline-success" onclick='triggerUnhide("{{item.id}}")'>Edit</button>
+                              <button id="id_order_{{item.id}}" type='button' class="btn btn-outline-success active" onclick='triggerOrderItem("{{item.id}}",false)'>OOS</button>
+                          </li>
+
+                      </ul>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </form>
+        <div class="mask rgba-black-strong d-flex justify-content-center align-items-center">
+            <input class="btn btn-primary float-left" type="submit" />
+        </div>
+      </main>
+    </div>
+
+</body>
+
+<script type="text/javascript">
+
+    function triggerOOSItem(item_id, bool_val, store_id, merch_id){
+        OOSItem(item_id, bool_val, store_id, merch_id)
+        console.log(bool_val)
+
+        let element = document.getElementById("oos"+item_id);
+        element.setAttribute("hidden", "hidden");
+	}
+
+    function triggerUnhide(item_id){
+       document.getElementById("oos"+item_id).removeAttribute("hidden");
+       let element = document.getElementById(item_id);
+        element.setAttribute("hidden", "hidden");
+    }
+
+</script>
+    {% include 'merch/snippets/OOS_form.html' %}
+</html>
+{% endblock content %}

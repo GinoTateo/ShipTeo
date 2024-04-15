@@ -1,0 +1,26 @@
+{% load static %}
+<script src="{% static 'Scripts/jquery-3.6.3.min.js' %}"></script>
+<script type="text/javascript">
+	function PlanRequest(user_id, plan_date){
+		var url = "{% url 'merch:plan-request' %}"
+        $.ajaxSetup({
+	        data: {csrfmiddlewaretoken: '{{ csrf_token }}'}
+        });
+		$.ajax({
+			type: 'POST',
+			dataType: "json",
+			url: url,
+			timeout: 5000,
+            data: {user_id: user_id, plan_date: plan_date},
+			success: function(data) {
+				console.log("SUCCESS", data)
+				if(data['response'] === "Item added to your cart"){
+					// ui is updated
+				}
+				else if(data['response'] != null){
+					alert(data['response'])
+				}
+			},
+		});
+	}
+</script>

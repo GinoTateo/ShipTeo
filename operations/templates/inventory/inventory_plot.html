@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventory Visualization</title>
+</head>
+<body>
+    <h1>Inventory Visualization</h1>
+    <!-- Form for selecting week (same as before) -->
+    <form method="get">
+        <select name="week">
+            <option value="Week 1">Week 1</option>
+            <!-- Other weeks as options -->
+        </select>
+        <button type="submit">View</button>
+    </form>
+    <!-- Render the first plot for item transfers -->
+    {{ plot_div|safe }}
+    <!-- Render the new plot for weekly transfers by item type -->
+    <h2>Weekly Transfers by Item Type</h2>
+    {{ plot_div_weekly|safe }}
+</body>
+</html>
