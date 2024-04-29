@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Place Your Order</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+
+{% extends "navbar.html" %}
+
+{% block content %}
+  <div class="container mt-3">
+    <h1 class="mb-4">Place Your Order</h1>
+
+    <form method="post" class="mb-3">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="routeSelect">Select Route Number:</label>
+        <select class="form-control" id="routeSelect" name="routeNumber">
+          {% for route in routes %}
+            <option value="{{ route }}">{{ route }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% for type, items in items_by_type.items %}
+        <div class="card mb-3">
+          <div class="card-header">
+            <h2 class="mb-0">{{ type }}</h2>
+          </div>
+          <div class="card-body">
+            <ul class="list-unstyled">
+              {% for item in items %}
+                <li class="mb-2">
+                  {{ item.Description }} ({{ item.Location }})
+                    <input type="number" name="quantity_{{ item.ItemNumber }}" min="0" class="form-control">
+                    <input type="hidden" name="description_{{ item.ItemNumber }}" value="{{ item.Description }}">
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary mt-3">Submit Order</button>
+    </form>
+  </div>
+{% endblock %}
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.min.js"></script>
+
+</body>
+</html>

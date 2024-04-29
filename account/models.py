@@ -1,3 +1,4 @@
+from django.conf.urls import url
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.db import models
 from django.conf import settings
@@ -37,7 +38,7 @@ def get_profile_image_filepath(self, filename):
 
 
 def get_default_profile_image():
-    return "TateoMerch/favicon.svg"
+    return url('https://ginotateo.github.io/ShipTeo_Style/images/favicon.jpg')
 
 
 # Create your models here.

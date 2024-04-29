@@ -1,4 +1,3 @@
-import email as email_lib
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from email import policy
@@ -11,7 +10,6 @@ import re
 from email.policy import default
 import fitz  # PyMuPDF
 import os
-
 
 email_address = os.getenv("email_address")
 password = os.getenv("password")
@@ -30,7 +28,6 @@ def is_inventory_email(raw_email):
     """
     # Parse the raw email content
     email_message = BytesParser(policy=policy.default).parsebytes(raw_email)
-
 
     # Check all parts of the email
     for part in email_message.iter_attachments():
@@ -146,14 +143,32 @@ def insert_inventory_to_mongodb(inventory_data):
     client = MongoClient(uri)
     db = client['mydatabase']
     collection = db['inventory']
+    isstats = db['inventory_stats']
 
-    if inventory_data and inventory_data['items']:  # Ensure there are items to save
-        result = collection.insert_one(inventory_data)
-        print(f"Inventory data inserted with record id: {result.inserted_id}")
+    # Check if there is inventory data to save
+    if inventory_data and 'items' in inventory_data:
+        # Insert inventory data
+        inventory_result = collection.insert_one(inventory_data)
+        print(f"Inventory data inserted with record id: {inventory_result.inserted_id}")
+
+        # Calculate statistics, e.g., total number of items
+        total_items = sum(item['quantity'] for item in inventory_data['items'] if 'quantity' in item)
+
+        # Create a stats dictionary
+        stats_data = {
+            'total_items': total_items,
+            'record_date': datetime.datetime.now()  # Storing the time when the stats were recorded
+        }
+
+        # Insert stats data
+        stats_result = isstats.insert_one(stats_data)
+        print(f"Inventory stats inserted with record id: {stats_result.inserted_id}")
+
     else:
         print("No inventory items to save.")
 
     client.close()
+
 
 def parse_inventory_pdf(pdf_bytes):
     inventory_data = {'items': []}
@@ -439,9 +454,6 @@ def extract_transfer_id_from_subject(raw_email_bytes):
         return None  # No ID found
 
 
-
-# Parse PDF for transfer information
-
 def parse_transfer_pdf(pdf_content):
     transfer_data = {
         'transfer_id': None,
@@ -521,7 +533,111 @@ def parse_transfer_pdf(pdf_content):
     return transfer_data
 
 
-    # Save to MongoDB
+def verify_order_with_transfer(client, transfer_id):
+    """
+    Verifies an order by matching it with a transfer ID, comparing items, and setting the 'verified' status.
+
+    Args:
+        client (MongoClient): The MongoDB client instance.
+        transfer_id (str): The ID of the transfer used to find the matching order.
+    """
+    db = client['mydatabase']
+    orders_collection = db['orders']
+    transfers_collection = db['transfers']
+
+    # Create an aggregation pipeline to match _id with regex after converting it to string
+    pipeline = [
+        {"$project": {
+            "_id_str": {"$toString": "$_id"},  # Convert ObjectId _id to string
+            "all_fields": "$$ROOT"  # Include all fields of the document
+        }},
+        {"$match": {
+            "_id_str": {"$regex": "3dab$"}  # Your regex here
+        }}
+    ]
+
+    matching_orders = list(orders_collection.aggregate(pipeline))
+
+    for order in matching_orders:
+        print(order["all_fields"])  # Access all original fields
+
+    for order in matching_orders:
+        # Find the corresponding transfer
+        matching_transfer = transfers_collection.find_one({"transfer_id": transfer_id})
+        if not matching_transfer:
+            print("No matching transfer found for order ID:", order['_id'])
+            continue
+
+        # Compare order and transfer details
+        items_with_variances, adjustments = calculate_variances(order, matching_transfer)
+        if adjustments == 0:  # Assuming adjustments zero means a perfect match
+            # Update the order as verified
+            result = orders_collection.update_one(
+                {"_id": order['_id']},
+                {"$set": {"verified": "verified"}}
+            )
+            print(f"Order {order['_id']} verified with transfer {transfer_id}.")
+        else:
+            orders_collection.update_one({'_id': order['_id']}, {'$set': {'verified': "variance"}})
+            print(f"Order {order['_id']} verified with transfer {transfer_id}.")
+
+def calculate_variances(order, matching_transfer):
+    """
+    Calculate differences between order items and transfer items.
+
+    Args:
+        order (dict): The order document from MongoDB.
+        matching_transfer (dict): The matching transfer document from MongoDB.
+
+    Returns:
+        tuple: A tuple containing a list of items with variances and the total adjustments.
+    """
+    order_item_dict = {item['ItemNumber']: item for item in order.get('items', [])}
+    transfer_item_dict = {item['ItemNumber']: item for item in matching_transfer.get('items', [])}
+    items_with_variances = []
+    adjustments = 0
+
+    for item_number, order_item in order_item_dict.items():
+        order_quantity = int(order_item['Quantity'])
+        transfer_item = transfer_item_dict.get(item_number)
+        if transfer_item:
+            transfer_quantity = int(transfer_item['Quantity'])
+            variance = transfer_quantity - order_quantity
+            adjustments += variance
+            items_with_variances.append({
+                'ItemNumber': item_number,
+                'ItemDescription': order_item.get('ItemDescription', 'N/A'),
+                'OrderQuantity': order_quantity,
+                'TransferQuantity': transfer_quantity,
+                'Variance': variance,
+                'IsOOS': False,  # Example logic, adjust as necessary
+            })
+            del transfer_item_dict[item_number]
+        else:
+            items_with_variances.append({
+                'ItemNumber': item_number,
+                'ItemDescription': order_item.get('ItemDescription', 'N/A'),
+                'OrderQuantity': order_quantity,
+                'TransferQuantity': 0,
+                'Variance': -order_quantity,
+                'IsOOS': False,
+            })
+
+    # Include transferred but not ordered items
+    for item_number, transfer_item in transfer_item_dict.items():
+        transfer_quantity = int(transfer_item['Quantity'])
+        item_description = transfer_item.get('ItemDescription', 'N/A')
+        adjustments += transfer_quantity
+        items_with_variances.append({
+            'ItemNumber': item_number,
+            'ItemDescription': item_description,
+            'OrderQuantity': 0,
+            'TransferQuantity': transfer_quantity,
+            'Variance': transfer_quantity,
+            'IsOOS': False,
+        })
+
+    return items_with_variances, adjustments
 
 
 def insert_transfer_to_mongodb(transfer_data, client):
@@ -542,8 +658,6 @@ def insert_transfer_to_mongodb(transfer_data, client):
     else:
         print("Invalid transfer data. Make sure it contains 'transfer_id' and 'items'.")
 
-    # client.close()
-
 
 def process_transfer_email(raw_email, client):
     attachments, body_text = extract_pdf_attachments_and_body(raw_email)
@@ -554,6 +668,7 @@ def process_transfer_email(raw_email, client):
         if transfer_data and transfer_id:
             transfer_data['transfer_id'] = transfer_id  # Include the transfer ID in your transfer data
             insert_transfer_to_mongodb(transfer_data, client)
+            verify_order_with_transfer(client, transfer_id)
 
 
 def fetch_unread_emails(email_address, password):
@@ -593,8 +708,6 @@ def classify_and_process_emails(emails, client):
             print("TR")
         else:
             print("Unknown email type.")
-
-
 
 def main():
     # Load environment variables from .env file

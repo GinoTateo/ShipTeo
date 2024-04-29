@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;  /* Light gray background to distinguish from card */
+        }
+        .container {
+            margin-top: 50px;
+        }
+        .card {
+            margin-top: 20px;  /* Spacing for card */
+        }
+    </style>
+</head>
+<body>
+{% include 'navbar.html' %}
+    <div class="container">
+        <div class="card">
+            <div class="card-body">
+                <h1 class="card-title">Order Confirmation</h1>
+                <div class="alert alert-success" role="alert">
+                    Thank you! Your order has been successfully placed.
+                </div>
+                <h2>Order Details</h2>
+                <table class="table">
+                    <tr>
+                        <th>Route Name</th>
+                        <td>{{ order.route_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Pick-up Date</th>
+                        <td>{{ order.pick_up_date|date:"F d, Y" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Pick-up Time</th>
+                        <td>{{ order.pick_up_time }}</td>
+                    </tr>
+                    <tr>
+                        <th>Total Cases</th>
+                        <td>{{ order.total_cases }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status</th>
+                        <td>{{ order.status }}</td>
+                    </tr>
+                </table>
+                <h3>Items Ordered</h3>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Item Number</th>
+                            <th>Description</th>
+                            <th>Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order.items %}
+                        <tr>
+                            <td>{{ item.ItemNumber }}</td>
+                            <td>{{ item.ItemDescription }}</td>
+                            <td>{{ item.Quantity }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <a href="{% url 'home' %}" class="btn btn-primary">Back to Home</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,575 +1,114 @@
 import json
+import logging
+import os
 from datetime import datetime, timedelta
-
+from reportlab.pdfgen import canvas
 import pandas as pd
 import plotly.express as px
 from bson.objectid import ObjectId
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.http import HttpResponse
 from django.http import HttpResponseRedirect
 from django.http import JsonResponse, Http404
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import redirect
 from django.shortcuts import render
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
-from django.views.generic import DetailView, ListView
 from pymongo import MongoClient
 from reportlab.lib.pagesizes import letter
-import rsr.models
-from account.models import Account
 from operations.email_parse_util import main
-from operations.filters import ItemFilter
-from operations.models import Item, Order, OrderItem, Warehouse, OutOfStockItem
+from django.core.paginator import Paginator
+
+# Constants
+MONGO_URI = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
 
 
-# Assuming this function is correctly getting MongoDB client and fetching data
-def get_mongodb_client():
-    # Return a MongoClient instance connected to your database
-    pass
+# MONGO_URI = os.environ.setdefault('DB_URI', 'DB_URI')
 
+class MongoConnection:
+    _client = None
 
-class ProductView(DetailView):
-    model = Item
-    template_name = "order_page.html"
+    @staticmethod
+    def get_client():
+        if MongoConnection._client is None:
+            MongoConnection._client = MongoClient(MONGO_URI)
+            logging.info("MongoDB client initialized")
+        return MongoConnection._client
 
-
-@login_required
-def OrderSummaryView(request):
-    # current_user = request.user
-    # user = get_object_or_404(User, username=current_user)
-    user = Account.objects.get(username=request.user)
-    order = Order.objects.filter(user=user)
-    context = {
-        'object': order
-    }
-
-    return render(request, 'order_summary.html', context)
-
-
-@login_required
-def OrderSummaryViewWithID(request, order_id):
-    # current_user = request.user
-    # user = get_object_or_404(User, username=current_user)
-    order = Order.objects.filter(id=order_id)
-    context = {
-        'object': order
-    }
-
-    return render(request, 'order_summary.html', context)
+    @staticmethod
+    def close_client():
+        if MongoConnection._client is not None:
+            MongoConnection._client.close()
+            MongoConnection._client = None
+            logging.info("MongoDB client closed")
 
 
 @login_required
-def add_to_cart(request, pk, quantity):
-    item = get_object_or_404(Item, pk=pk)
-    order_item, created = OrderItem.objects.get_or_create(
-        item=item,
-        user=request.user,
-        ordered=False
-    )
-    order_qs = Order.objects.filter(user=request.user, ordered=False)
-
-    if order_qs.exists():
-        order = order_qs[0]
-
-        if order.items.filter(item__pk=item.pk).exists():
-            order_item.quantity += quantity
-            order_item.save()
-            messages.info(request, "Added quantity Item")
-            return redirect("order-form")
-        else:
-            order.items.add(order_item)
-            order_item.quantity += quantity - 1
-            order_item.save()
-            messages.info(request, "Item added to your cart")
-            return redirect("order-form")
-    else:
-        ordered_date = timezone.now()
-        order = Order.objects.create(user=request.user, ordered_date=ordered_date)
-        order.items.add(order_item)
-        order_item.quantity += quantity - 1
-        order_item.save()
-        messages.info(request, "Item added to your cart")
-        return redirect("order-form")
-
-
-@login_required
-def add_item_order(request, *args, **kwargs):
-    user_id = request.user.id
-
-    user = Account.objects.get(id=user_id)
-    payload = {}
-
-    item_id = request.POST.get("item_id")
-    quantity_str = request.POST.get("quantity")
-    try:
-        quantity = int(quantity_str)
-    except ValueError:
-        quantity = quantity_str
-
-    item = Item.objects.get(pk=item_id)
-    if item:
-        order_item, created = OrderItem.objects.get_or_create(
-            item=item,
-            user=request.user,
-            ordered=False
-        )
-        order = Order.objects.filter(user=request.user, ordered=False)
-        if order.exists():
-            order = order[0]
-
-            if order.items.filter(item__pk=item.pk).exists():
-                order_item.quantity += quantity
-                order_item.save()
-                payload['response'] = "Item added to your cart"
-            else:
-                order.items.add(order_item)
-                order_item.quantity += quantity - 1
-                order_item.save()
-                payload['response'] = "Item added to your cart"
-        else:
-            ordered_date = timezone.now()
-            order = Order.objects.create(user=request.user, ordered_date=ordered_date)
-            order.item.add(item)
-            order_item.quantity += quantity - 1
-            order_item.save()
-            payload['response'] = "Item added to your cart"
-    else:
-        payload['response'] = "Could not find request"
-    return redirect("ops:order-form")
-
-
-@login_required
-def remove_from_cart(request, pk):
-    item = get_object_or_404(Item, pk=pk)
-    order_qs = Order.objects.filter(
-        user=request.user,
-        ordered=False
-    )
-    if order_qs.exists():
-        order = order_qs[0]
-        if order.items.filter(item__pk=item.pk).exists():
-            order_item = OrderItem.objects.filter(
-                item=item,
-                user=request.user,
-                ordered=False
-            )[0]
-            order_item.delete()
-            messages.info(request, "Item \"" + order_item.item.item_name + "\" remove from order")
-            return redirect("order-summary")
-        else:
-            messages.info(request, "This Item is not in your order")
-            return redirect("product", pk=pk)
-    else:
-        # add message doesnt have order
-        messages.info(request, "You do not have an Order")
-        return redirect("product", pk=pk)
-
-
-@login_required
-def reduce_quantity_item(request, pk):
-    item = get_object_or_404(Item, pk=pk)
-    order_qs = Order.objects.filter(
-        user=request.user,
-        ordered=False
-    )
-    if order_qs.exists():
-        order = order_qs[0]
-        if order.items.filter(item__pk=item.pk).exists():
-            order_item = OrderItem.objects.filter(
-                item=item,
-                user=request.user,
-                ordered=False
-            )[0]
-            if order_item.quantity > 1:
-                order_item.quantity -= 1
-                order_item.save()
-            else:
-                order_item.delete()
-            messages.info(request, "Item quantity was updated")
-            return redirect("order-summary")
-        else:
-            messages.info(request, "This Item not in your cart")
-            return redirect("order-summary")
-    else:
-        # add message doesnt have order
-        messages.info(request, "You do not have an Order")
-        return redirect("order-summary")
-
-
-class orderForm(ListView):
-    model = Item
-    template_name = "order_form2.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['filter'] = ItemFilter(self.request.GET, queryset=self.get_queryset())
-        return context
-
-
-@login_required
-def ItemData(request, item_id):
-    item = Item.objects.get(id=item_id)
-
-    return render(request, "item_data.html", {'item': item})
-
-
-# def WarehouseDateItemView(request, warehouse_id):
-#     warehouse = Warehouse.objects.get(id=warehouse_id)
-#     inventory = Inventory.objects.filter(warehouse=warehouse).latest('date')
-#     inv_items = inventory.items.all()
-#     items = Item.objects.filter(Q(item_type='G') | Q(item_type='W'))
-#
-#     return render(request, "warehouse_dates.html", {'items': inv_items, 'warehouse': warehouse})
-
-
-# @login_required
-# def WarehouseDateItemForm(request, item_id):
-#     item = Item.objects.get(id=item_id)
-#     items = Item.objects.filter(Q(item_type='G') | Q(item_type='W'))
-#     last_item = items.last()
-#     form = WarehouseForm()
-#     if item.pk is last_item.pk:
-#         return render(request, "warehouse_dates.html", {'items': items})
-#     return render(request, "item_date_form.html", {'item': item, 'form': form})
-
-
-# @login_required
-# def WarehouseDateItemInput(request, item_id, inventory_id):
-#     inventory = Inventory.objects.get(id=inventory_id)
-#     if request.method == 'POST':
-#         # create a form instance and populate it with data from the request:
-#         form = WarehouseForm(request.POST)
-#         # check whether it's valid:
-#         if form.is_valid():
-#             date = form.cleaned_data['Date']
-#             amount = form.cleaned_data['Amount']
-#
-#             item = Item.objects.get(id=item_id)
-#
-#             add_item, created = InventoryItem.objects.get_or_create(
-#                 item=item,
-#                 total_quantity=amount,
-#                 item_date=date,
-#             )
-#
-#             inventory.items.add(add_item)
-#             inventory.save()
-#
-#             items = Item.objects.filter(Q(item_type='G') | Q(item_type='W'))
-#             last_item = items.last()
-#             item = Item.objects.get(id=item_id + 1)
-#             if item.pk is last_item.pk:
-#                 return render(request, "warehouse_dates.html", {'items': items})
-#             return render(request, "item_date_form.html", {'form': form, 'item': item, 'inventory': inventory})
-#
-#     # if a GET (or any other method) we'll create a blank form
-#     else:
-#         form = WarehouseForm()
-#
-#     return render(request, 'item_date_form.html', {'form': form, 'inventory': inventory})
-
-
-# @login_required
-# def WarehouseDateForm(request, warehouse_id):
-#     items = Item.objects.all()
-#
-#     warehouse = Warehouse.objects.get(id=warehouse_id)
-#     inventory = Inventory.objects.filter(warehouse=warehouse).latest('date')
-#     inv_items = inventory.items.all()
-#
-#     for item in inv_items:
-#         item.item_date = None
-#         item.save()
-#
-#     item = items.first()
-#     form = WarehouseForm()
-#
-#     return render(request, 'item_date_form.html', {'form': form, 'item': item, 'inventory': inventory})
-
-
-@login_required
-# def WarehouseDateFormSkip(request, item_id, inventory_id):
-#     inventory = Inventory.objects.get(id=inventory_id)
-#     item = Item.objects.get(id=item_id + 1)
-#     form = WarehouseForm()
-#
-#     items = Item.objects.filter(Q(item_type='G') | Q(item_type='W'))
-#     last_item = items.last()
-#
-#     if item.pk is last_item.pk:
-#         return render(request, "warehouse_dates.html", {'items': items, 'inventory': inventory})
-#
-#     return render(request, "item_date_form.html", {'form': form, 'item': item, 'inventory': inventory})
-
-def WarehouseList(request):
-    warehouses = Warehouse.objects.all()
-
-    return render(request, 'warehouse_list.html', {'warehouses': warehouses})
-
-
-@login_required
-def warehouse_dashboard(request, warehouse_id):
-    # Assuming you have a Django model Warehouse
-    try:
-        warehouse = Warehouse.objects.get(id=warehouse_id)
-    except Warehouse.DoesNotExist:
-        raise Http404("Warehouse not found")
-
-    routes = warehouse.routes.all()
-
-    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
+def warehouse_dashboard(request):
+    client = MongoConnection.get_client()
     db = client['mydatabase']
-
-    # Fetch inventory stats
-    inventory_stats = db['inventory_stats'].find_one(sort=[("_id", -1)])  # Get the most recent stats document
-    if not inventory_stats:
-        # Handle the case where no stats are found, maybe set default values or return an error
-        print("No inventory stats found")
-        inventory_status = 0
-        total_out_of_stocks = 0
-    else:
-        # Assuming the inventory_stats document contains 'total_inventory' and 'num_oos_items' fields
-        inventory_status = inventory_stats.get('total_inventory', 0)
-        total_out_of_stocks = inventory_stats.get('num_oos_items', 0)
-
-    # Calculate the number of pending orders
+    inventory_stats = db['inventory_stats'].find_one(sort=[("_id", -1)]) or {}
+    total_out_of_stocks = inventory_stats.get('num_oos_items', 0)
+    inventory_status = inventory_stats.get('total_inventory', 0)
     pending_orders_count = db['orders'].count_documents({"status": "Pending"})
 
-    client.close()
-
-    return render(request, 'warehouse_dashboard.html', {
-        'warehouse': warehouse,
-        'routes': routes,
+    return render(request, 'warehouse/warehouse_dashboard.html', {
         'total_out_of_stocks': total_out_of_stocks,
         'inventory_status': inventory_status,
         'pending_orders': pending_orders_count
     })
 
 
-import io
-from django.http import FileResponse
-from reportlab.pdfgen import canvas
+# @login_required
+# def orders_view(request):
+#     filters = {
+#         'date': request.GET.get('date'),
+#         'status': request.GET.get('status'),
+#         'route': request.GET.get('route')
+#     }
+#
+#     client = MongoConnection.get_client()
+#     db = client['mydatabase']
+#     query = build_order_query(filters)
+#     orders = list(db['orders'].find(query))
+#
+#     return render(request, 'orders/order_view.html', {'orders': orders})
+#
 
-
-def PalletPages(request, route_id):
-    if request.method == 'POST':
-        RT = rsr.models.Route.objects.get(id=route_id)
-        RTnum = RT.number
-
-        if request.method == 'POST':
-            # Instanciate the form with posted data
-
-            pages = int(request.POST.get('pallets'))
-            # Create a file-like buffer to receive PDF data.
-            buffer = io.BytesIO()
-
-            # Create the PDF object, using the buffer as its "file."
-            p = canvas.Canvas(buffer)
-            p.setTitle(f"RT{RTnum}_pallet_pages")
-            # Draw things on the PDF. Here's where the PDF generation happens.
-            # See the ReportLab documentation for the full list of functionality.
-            for page in range(pages):
-                p.setFont("Helvetica", 100)
-                p.drawString(150, 750, "RT " + RTnum.__str__(), )
-                p.drawString(150, 150, f'{page + 1} of {pages}')
-                p.showPage()
-            # Close the PDF object cleanly, and we're done.
-
-            p.save()
-
-            # FileResponse sets the Content-Disposition header so that browsers
-            # present the option to save the file.
-            buffer.seek(0)
-            return FileResponse(buffer, as_attachment=True, filename=f'RT{RTnum}_pallet_pages.pdf')
-        else:  # The form is invalid return a json response
-            return JsonResponse({"Error": "Form is invalid"}, status=400)
-    else:
-        return render(request, 'warehouse_print.html')
-    # return render(request, 'pallet-pages.html', {'RTnum': RTnum, 'pages': pages})
-
-
-def PrintPalletPages(request, warehouse_id):
-    warehouse = Warehouse.objects.get(id=warehouse_id)
-    routes = warehouse.routes.all()
-    return render(request, 'warehouse_print.html', {'warehouse': warehouse, 'routes': routes})
-
-
-@login_required
-def WarehousePhysicalInventory(request, item_id):
-    return render(request, 'item_date_form.html')
-
-
-@login_required
-def WarehouseManagerDetail(request, warehouse_id):
-    warehouse = Warehouse.objects.get(id=warehouse_id)
-    routes = warehouse.routes.all()
-    user = request.user
-    orders = Order.objects.all()
-
-    return render(request, 'warehouse_manager_detail.html',
-                  {'warehouse': warehouse, 'routes': routes, 'user': user, 'orders': orders})
-
-
-@login_required
-def WarehouseManagerOrderStatusUpdate(request, order_id):
-    order = Order.objects.get(id=order_id)
-
-    if request.method == 'POST':
-        # Access form input data
-        order_status = request.POST.get('orderStatus')
-        quantity = request.POST.get('quantity')
-        order.status = order_status
-        order.save()
-
-    return WarehouseManagerOrderStatusDetail(request, order_id)
-
-
-@login_required
-def WarehouseManagerOrderStatusView(request):
-    orders = Order.objects.all()
-
-    return render(request, 'OrderStatusView.html', {'orders': orders})
-
-
-@login_required
-def WarehouseManagerOrderStatusDetail(request, order_id):
-    order = Order.objects.get(id=order_id)
-
-    return render(request, 'OrderStatusDetail.html', {'order': order})
-
-
-@login_required
-def orders_view(request):
-    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
-    db = client['mydatabase']
-    collection = db['orders']
-
-    # Getting filter parameters from the request
-    date = request.GET.get('date')
-    status = request.GET.get('status')
-    route = request.GET.get('route')
-
-    routes = {
-        "RTC000003",
-        "RTC000013",
-        "RTC000018",
-        "RTC000019",
-        "RTC000089",
-        "RTC000377",
-        "RTC000379",
-        "RTC000649",
-        "RTC000700",
-        "RTC000719",
-        "RTC000004",
-        "RTC000127",
-        "RTC000433",
-        "RTC000647",
-        "RTC000720",
-        "RTC000730",
-        "RTC000731",
-        "RTC000765",
-        "RTC000783",
-        "RTC000764",
-        "RTC000002",
-    }
-
-    # Building the query based on the filters
+def build_order_query(filters):
     query = {}
-    if date:
-        start_of_day = datetime.fromisoformat(date)
+    if filters['date']:
+        start_of_day = datetime.fromisoformat(filters['date'])
         end_of_day = start_of_day + timedelta(days=1)
         query['pick_up_date'] = {"$gte": start_of_day, "$lt": end_of_day}
-    if status:
-        query['status'] = status
-    if route:
-        query['route'] = route
-
-    orders = list(collection.find(query))
-
-    # Renaming '_id' field to 'order_id' for each order
-    for order in orders:
-        order['order_id'] = str(order['_id'])  # Convert ObjectId to string
-        del order['_id']
-
-    orders.reverse()
-
-    # You can now pass these orders to your template or process them further
-    return render(request, 'orders/order_view.html', {'orders': orders, 'routes': routes})
+    if filters['status']:
+        query['status'] = filters['status']
+    if filters['route']:
+        query['route'] = filters['route']
+    return query
 
 
 @login_required
 def edit_order(request, order_id):
-    try:
-        uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
-        db = client['mydatabase']
-        collection = db['orders']
+    if request.method != 'POST':
+        return HttpResponse("Invalid request method", status=405)
 
-        # Update the order's status to "preparing"
-        result = collection.update_one(
-            {'_id': ObjectId(order_id)},
-            {'$set': {'status': "Preparing"}}
-        )
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db['orders']
+    result = collection.update_one(
+        {'_id': ObjectId(order_id)},
+        {'$set': {'status': "Preparing"}}
+    )
+    if result.matched_count == 0:
+        return HttpResponse("Order not found", status=404)
 
-        # Check if the order was successfully updated
-        if result.matched_count == 0:
-            # No order was found with the provided ID
-            print("No order found with the specified ID.")
-            client.close()
-            return HttpResponse("Order not found", status=404)
-
-        # Retrieve the updated order for rendering
-        order = collection.find_one({'_id': ObjectId(order_id)})
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        client.close()
-        return HttpResponse("Error connecting to database", status=500)
-
-    client.close()
-    return redirect("ops:edit_order", order_id)
+    return redirect('ops:edit_order', order_id=order_id)
 
 
-
-def prepare_order(request, order_id):
-    try:
-        uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
-        db = client['mydatabase']
-        collection = db['orders']
-
-        if request.method == 'POST':
-            # Assuming builder_name is sent via POST request
-            builder_name = request.POST.get('builder_name')
-
-            start_time = datetime.now()
-
-            # Update the order's builder and status
-            result = collection.update_one(
-                {'_id': ObjectId(order_id)},
-                {'$set': {'status': "Preparing", 'builder_name': builder_name, 'start_time': start_time}}
-            )
-
-            if result.matched_count == 0:
-                print("No order found with the specified ID.")
-                client.close()
-                return HttpResponse("Order not found", status=404)
-
-            # Redirect to PDF or detail view after updating
-            client.close()
-            return redirect('../pdf', order_id=order_id)
-
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        client.close()
-        return HttpResponse("Error connecting to database", status=500)
-
+# Further functions to be optimized similarly
 
 def complete_order(request, order_id):
     try:
@@ -623,71 +162,145 @@ def complete_order(request, order_id):
     return JsonResponse({'success': True})
 
 
+def calculate_duration(start_time, end_time):
+    if not start_time:
+        return 0
+    return (end_time - start_time).total_seconds()
+
+
+def prepare_order(request, order_id):
+    if request.method != 'POST':
+        return HttpResponse("Invalid request method", status=405)
+
+    client = MongoConnection.get_client()
+    collection = client['mydatabase']['orders']
+    builder_name = request.POST.get('builder_name', 'Default Builder')
+    start_time = datetime.now()
+
+    result = collection.update_one(
+        {'_id': ObjectId(order_id)},
+        {'$set': {'status': "Preparing", 'builder_name': builder_name, 'start_time': start_time}}
+    )
+
+    if result.matched_count == 0:
+        return HttpResponse("Order not found", status=404)
+
+    # Redirect to a PDF generation view or another relevant view
+    return redirect('../pdf', order_id=order_id)
+
+
+# Here
+@login_required
+def orders_view(request):
+    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client['mydatabase']
+    collection = db['orders']
+
+    # Getting filter parameters from the request
+    date = request.GET.get('date')
+    status = request.GET.get('status')
+    route = request.GET.get('route')
+    page_number = request.GET.get('page', 1)  # Getting the page number, default is 1
+
+    routes = {
+        "RTC000003",
+        "RTC000013",
+        "RTC000018",
+        "RTC00019",
+        "RTC000089",
+        "RTC000377",
+        "RTC000379",
+        "RTC000649",
+        "RTC000700",
+        "RTC000719",
+        "RTC000004",
+        "RTC000127",
+        "RTC000433",
+        "RTC000647",
+        "RTC000720",
+        "RTC000730",
+        "RTC000731",
+        "RTC000765",
+        "RTC000783",
+        "RTC000764",
+        "RTC000002",
+    }
+
+
+    # Building the query based on the filters
+    query = {}
+    if date:
+        start_of_day = datetime.fromisoformat(date)
+        end_of_day = start_of_day + timedelta(days=1)
+        query['pick_up_date'] = {"$gte": start_of_day, "$lt": end_of_day}
+    if status:
+        query['status'] = status
+    if route:
+        query['route'] = route
+
+    # Sort orders by date descending to get the newest orders first
+    orders = list(collection.find(query).sort("pick_up_date", -1))
+
+    for order in orders:
+        order['order_id'] = str(order['_id'])
+
+    # Apply pagination
+    paginator = Paginator(orders, 15)  # Show 15 orders per page
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'orders/order_view.html', {'page_obj': page_obj, 'routes': routes})
+
+
 @login_required
 def order_detail_view(request, order_id):
-    # Directly create a MongoDB client instance
     edit_mode = 'edit' in request.GET and request.GET['edit'] == 'true'
 
-    try:
-        uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
-        db = client['mydatabase']
-        collection = db['orders']
-        items_collection = db['mapped_items']
-        # Fetch the order document
-        order = collection.find_one({'_id': ObjectId(order_id)})
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db['orders']
+    items_collection = db['mapped_items']
 
-        # Extract item numbers from the order items
-        order_item_numbers = [item['ItemNumber'] for item in order.get('items', [])]
+    order = collection.find_one({'_id': ObjectId(order_id)})
+    if not order:
+        raise Http404("Order not found")
 
-        # Fetch available items that are not in the order
-        available_items = list(items_collection.find({'ItemNumber': {'$nin': order_item_numbers}}))
-
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return HttpResponse("Error connecting to database", status=500)
-
-    # Fetch Out of Stock (OOS) items
-    OOS_items = OutOfStockItem.objects.all().values_list('item_number', flat=True)
+    # Extract item numbers and fetch related data
+    order_item_numbers = [item['ItemNumber'] for item in order.get('items', [])]
+    available_items = list(items_collection.find({'ItemNumber': {'$nin': order_item_numbers}}))
 
     if request.method == 'POST' and edit_mode:
         # Assuming each item in the form is prefixed with 'item_', followed by the item's index or ID
         # and the field names are appended with '_description', '_quantity', and '_inStock'
-        for key, value in request.POST.items():
-            if key.startswith('items_') and key.endswith('_quantity'):
-                # Extract the item ID/index from the key
-                item_id = key.split('_')[1]
-                # Update the quantity for the item
-                new_quantity = request.POST.get(f'items_{item_id}_quantity')
-                in_stock = request.POST.get(f'items_{item_id}_inStock') == 'true'
-
-                # Find the item in the 'order' document and update its quantity and inStock status
-                # Assuming 'items' is a list of items within the 'order' document
-                for item in order.get('items', []):
-                    if str(item.get('ItemNumber')) == item_id:
-                        item['Quantity'] = int(new_quantity)
-                        item['InStock'] = in_stock
-                        break
-
-        # Save the updated order back to MongoDB
-        collection.update_one({'_id': ObjectId(order_id)}, {'$set': {'items': order['items']}})
-
+        process_order_edits(request, order, collection)
         # Redirect to avoid resubmitting the form on refresh
         return HttpResponseRedirect(reverse('ops:detail_order_view', args=[order_id]))
 
-    client.close()
     return render(request, 'orders/order_detail.html', {
         'order': order,
-        'OOS_items': OOS_items,
         'available_items': available_items,
     })
 
 
+def process_order_edits(request, order, collection):
+    for key, value in request.POST.items():
+        if key.startswith('items_') and key.endswith('_quantity'):
+            item_id = key.split('_')[1]
+            new_quantity = request.POST.get(f'items_{item_id}_quantity')
+            in_stock = request.POST.get(f'items_{item_id}_inStock') == 'true'
+
+            for item in order.get('items', []):
+                if str(item.get('ItemNumber')) == item_id:
+                    item['Quantity'] = int(new_quantity)
+                    item['InStock'] = in_stock
+                    break
+
+    collection.update_one({'_id': ObjectId(order['id'])}, {'$set': {'items': order['items']}})
+
+
 @login_required
 def generate_order_pdf(request, order_id):
-    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
+    client = MongoConnection.get_client()
     db = client['mydatabase']
     collection = db['orders']
     oos_items_collection = db['oos_items']
@@ -701,7 +314,6 @@ def generate_order_pdf(request, order_id):
     item_to_location = {}
     item_to_type = {}
 
-
     # Fetch location and type mappings from the 'mapped_items' collection in one go
     for doc in mapped_items_collection.find({}):
         item_number = doc["ItemNumber"]
@@ -714,7 +326,6 @@ def generate_order_pdf(request, order_id):
     ]
 
     order = collection.find_one({'_id': ObjectId(order_id)})
-    client.close()
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="order_{order_id}.pdf"'
@@ -751,8 +362,6 @@ def generate_order_pdf(request, order_id):
     builder_name = order.get("builder_name")
     p.drawString(30, height - 70, f"Transfer ID: {tid} ")
     p.drawString(30, height - 90, f"Builder: {builder_name} ")
-
-
 
     # Move total quantity and related information to the top right
     p.drawString(width - 300, height - 50, f"Total Quantity Ordered: {total_quantity}")
@@ -821,9 +430,6 @@ def generate_order_pdf(request, order_id):
         # Move to the next line
         y_position -= 20
 
-
-
-
         # Check if we need to start a new page
         if y_position < 50:
             p.showPage()
@@ -835,31 +441,22 @@ def generate_order_pdf(request, order_id):
     return response
 
 
-def inventory_view(request, warehouse_id):
+@login_required
+def inventory_view(request):
     try:
-        # MongoDB connection
-        uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
+        client = MongoConnection.get_client()
         db = client['mydatabase']
-
         # Fetch the latest inventory
-        inventory_collection = db['inventory']
-        latest_inventory = inventory_collection.find_one(sort=[("_id", -1)])
-
-        inventory_items = latest_inventory['items'] if latest_inventory else []
-
-        # Fetch Out-of-Stock items directly from oos_items collection
-        oos_items_collection = db['oos_items']
-        OOS_items = list(oos_items_collection.find({}, {'ItemNumber': 1, 'ItemDescription': 1}))
-
+        latest_inventory = db['inventory'].find_one(sort=[("_id", -1)])
+        inventory_items = latest_inventory.get('items', []) if latest_inventory else []
+        # Fetch Out-of-Stock items directly
+        oos_items = list(db['oos_items'].find({}, {'ItemNumber': 1, 'ItemDescription': 1}))
     except Exception as e:
-        print(f"An error occurred: {e}")
-        return HttpResponse("Error connecting to database", status=500)
+        return HttpResponse(f"Error connecting to database: {str(e)}", status=500)
 
-    # Render the inventory list template, passing both inventory items and OOS items
     return render(request, 'inventory/inventory_list.html', {
         'inventory_items': inventory_items,
-        'OOS_items': OOS_items,
+        'OOS_items': oos_items,
     })
 
 
@@ -871,226 +468,189 @@ def get_item_description(item_number, items_list):
     return 'Description Unavailable'
 
 
+@login_required
 def verify_order(request, order_id):
-    try:
-        uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
-        db = client['mydatabase']
-        orders_collection = db['orders']
-        transfers_collection = db['transfers']
-        oos_items_collection = db['oos_items']
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    orders_collection = db['orders']
+    transfers_collection = db['transfers']
+    oos_items_collection = db['oos_items']
+    # Fetching OOS item numbers
+    oos_item_numbers = {doc['ItemNumber'] for doc in oos_items_collection.find({}, {'ItemNumber': 1})}
+    # Fetch the order and corresponding transfer
+    order = orders_collection.find_one({'_id': ObjectId(order_id)})
+    matching_transfer = transfers_collection.find_one(
+        {"transfer_id": {"$regex": ".*" + str(order['_id'])[-4:] + "$"}})
+    if not order or not matching_transfer:
+        return render(request, 'error_page.html', {'error': "Transfer not found in database."})
+    # Preparing data for the template
+    items_with_variances, adjustments = calculate_variances(order, matching_transfer, oos_item_numbers)
 
-        # Fetching OOS item numbers
-        oos_items_docs = list(oos_items_collection.find({}, {'ItemNumber': 1}))
-        oos_item_numbers = {doc['ItemNumber'] for doc in oos_items_docs}
+    return render(request, 'orders/order_verification.html', {
+        'order': order,
+        'matching_transfer': matching_transfer,
+        'order_items': items_with_variances,
+        'adjustments': adjustments,
+    })
 
-        # Fetch the order and corresponding transfer
-        order = orders_collection.find_one({'_id': ObjectId(order_id)})
-        matching_transfer = transfers_collection.find_one(
-            {"transfer_id": {"$regex": ".*" + str(order['_id'])[-4:] + "$"}})
 
-        if not order or not matching_transfer:
-            return render(request, 'error_page.html', {'error': "Transfer not found in database."})
-
-        order_items = order.get('items', [])
-        transfer_items = matching_transfer.get('items', [])
-
-        # Create dictionaries for efficient lookups
-        order_item_dict = {item['ItemNumber']: item for item in order_items}
-        transfer_item_dict = {item['ItemNumber']: item for item in transfer_items}
-
-        # Preparing data for the template
-        items_with_variances = []
-
-        # Adustments
-        adjustments = 0;
-
-        # Checking items that were both ordered and transferred, including quantity variances
-        for item_number, order_item in order_item_dict.items():
-            order_quantity = int(order_item['Quantity'])
-            transfer_item = transfer_item_dict.get(item_number)
-            if transfer_item:
-                transfer_quantity = int(transfer_item['Quantity'])
-                variance = transfer_quantity - order_quantity
-                adjustments = variance + adjustments
-                is_oos = item_number in oos_item_numbers
-                items_with_variances.append({
-                    'ItemNumber': item_number,
-                    'ItemDescription': order_item.get('ItemDescription', 'N/A'),
-                    'OrderQuantity': order_quantity,
-                    'TransferQuantity': transfer_quantity,
-                    'Variance': variance,
-                    'IsOOS': is_oos,
-                })
-                # Remove item from transfer_item_dict to mark it as processed
-                del transfer_item_dict[item_number]
-            else:
-                # Ordered but not transferred
-                items_with_variances.append({
-                    'ItemNumber': item_number,
-                    'ItemDescription': order_item.get('ItemDescription', 'N/A'),
-                    'OrderQuantity': order_quantity,
-                    'TransferQuantity': 0,
-                    'Variance': order_quantity,
-                    'IsOOS': item_number in oos_item_numbers,
-                })
-
-        # Checking items that were transferred but not ordered
-        for item_number, transfer_item in transfer_item_dict.items():
+def calculate_variances(order, matching_transfer, oos_item_numbers):
+    order_item_dict = {item['ItemNumber']: item for item in order.get('items', [])}
+    transfer_item_dict = {item['ItemNumber']: item for item in matching_transfer.get('items', [])}
+    items_with_variances = []
+    adjustments = 0
+    # Calculating variances and adjustments
+    for item_number, order_item in order_item_dict.items():
+        order_quantity = int(order_item['Quantity'])
+        transfer_item = transfer_item_dict.get(item_number)
+        if transfer_item:
             transfer_quantity = int(transfer_item['Quantity'])
-            item_description = get_item_description(item_number, order_items + transfer_items)
-            adjustments = variance + transfer_quantity
+            variance = transfer_quantity - order_quantity
+            adjustments += variance
             items_with_variances.append({
                 'ItemNumber': item_number,
-                'ItemDescription': item_description,
-                'OrderQuantity': 0,
+                'ItemDescription': order_item.get('ItemDescription', 'N/A'),
+                'OrderQuantity': order_quantity,
                 'TransferQuantity': transfer_quantity,
-                'Variance': transfer_quantity,
-                'IsOOS': False,  # Assuming these cannot be OOS as they were transferred
-                'Unordered': True
+                'Variance': variance,
+                'IsOOS': item_number in oos_item_numbers,
             })
-
-        return render(request, 'orders/order_verification.html', {
-            'order': order,
-            'matching_transfer': matching_transfer,
-            'order_items': items_with_variances,
-            'adjustments': adjustments,
+            del transfer_item_dict[item_number]
+        else:
+            items_with_variances.append({
+                'ItemNumber': item_number,
+                'ItemDescription': order_item.get('ItemDescription', 'N/A'),
+                'OrderQuantity': order_quantity,
+                'TransferQuantity': 0,
+                'Variance': -order_quantity,
+                'IsOOS': item_number in oos_item_numbers,
+            })
+    # Include transferred but not ordered items
+    for item_number, transfer_item in transfer_item_dict.items():
+        transfer_quantity = int(transfer_item['Quantity'])
+        item_description = get_item_description(item_number,
+                                                order.get('items', []) + matching_transfer.get('items', []))
+        adjustments += transfer_quantity
+        items_with_variances.append({
+            'ItemNumber': item_number,
+            'ItemDescription': item_description,
+            'OrderQuantity': 0,
+            'TransferQuantity': transfer_quantity,
+            'Variance': transfer_quantity,
+            'IsOOS': False,
         })
-    except Exception as e:
-        return render(request, 'error_page.html', {'error': str(e)})
+    return items_with_variances, adjustments
 
 
 @require_http_methods(["GET", "POST"])
 def place_order_view(request):
     if request.method == 'POST':
         try:
-            # Assuming JSON data is sent
             data = json.loads(request.body)
-            date = data.get('date')
-            route = data.get('route')
-            orders = data.get('orders')  # This is expected to be a list of items
-            status = data.get('status', 'Received')  # Default status
-            transfer_id = data.get('transfer_id')
-
-            # MongoDB connection setup
-            uri = "your_mongodb_connection_uri"
-            client = MongoClient(uri)
-            db = client['mydatabase']
-            orders_collection = db['orders2']
-
-            # Create and save the entire order
             order = {
-                'date': date,
-                'route': route,
-                'orders': orders,  # Directly saving the array of items
-                'status': status,
-                'transfer_id': transfer_id,
+                'date': data.get('date'),
+                'route': data.get('route'),
+                'orders': data.get('orders', []),  # Ensure default is a list if not provided
+                'status': data.get('status', 'Received'),
+                'transfer_id': data.get('transfer_id')
             }
-            order_id = orders_collection.insert_one(order).inserted_id
 
-            client.close()
+            client = MongoConnection.get_client()
+            db = client['mydatabase']
+            order_id = db['orders'].insert_one(order).inserted_id
 
-            # Return a success response with the order ID
             return JsonResponse({'message': 'Order placed successfully', 'order_id': str(order_id)}, status=201)
 
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
 
-    # For GET requests, show the form (assuming you have a template for it)
     return render(request, 'orders/place_order.html')
 
 
-def list_items_view(request, warehouse_id):
-    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
+@login_required
+def list_items_view(request):
+    client = MongoConnection.get_client()
     db = client['mydatabase']
-    items_collection = db['items']
-
-    items_cursor = items_collection.find({})
+    items_cursor = db['items'].find({})
     items_by_type = {}
+
     for item in items_cursor:
-        # Replace spaces in keys
+        item_type = item.get('Item_Type', 'Other')
         processed_item = {k.replace(' ', '_'): v for k, v in item.items()}
 
-        item_type = processed_item.get('Item_Type', 'Other')  # Adjusted key
         if item_type not in items_by_type:
             items_by_type[item_type] = []
         items_by_type[item_type].append(processed_item)
 
-    client.close()
-    return render(request, 'list_items.html', {'items_by_type': items_by_type})
+    return render(request, 'warehouse/list_items.html', {'items_by_type': items_by_type})
 
 
+@require_http_methods(["GET", "POST"])
 def review_order_view(request):
     if request.method == 'POST':
         items = []
         for key, value in request.POST.items():
             if key.startswith('item_number_'):
                 try:
-                    *_, type_index, item_index = key.split('_')
+                    _, type_index, item_index = key.split('_')
                     item_number = value
                     item_description_key = f'item_description_{type_index}_{item_index}'
                     quantity_key = f'quantity_{type_index}_{item_index}'
-                    item_description = request.POST.get(item_description_key, '')
-                    quantity = request.POST.get(quantity_key, 0)
-                    transformed_items = []
-                    for item in items:
-                        transformed_item = {
-                            'Item_Number': item.get('Item Number'),
-                            'Item_Description': item.get('Item Description', 'Default Description'),
-                            'Quantity': item.get('Quantity')
-                        }
-                        transformed_items.append(transformed_item)
-                except ValueError as e:
-                    print(f"Error processing {key}: {e}")
-                    # Handle the error appropriately, e.g., log it, send a user-friendly message, etc.
-                    return HttpResponse("There was an error processing your request.", status=400)
 
-        # Assuming you're using Django's session framework to temporarily store the order
+                    item_description = request.POST.get(item_description_key, 'Description Unavailable')
+                    quantity = int(request.POST.get(quantity_key, 0))
+
+                    transformed_item = {
+                        'Item_Number': item_number,
+                        'Item_Description': item_description,
+                        'Quantity': quantity
+                    }
+                    items.append(transformed_item)
+                except Exception as e:
+                    print(f"Error processing item details: {e}")
+                    return HttpResponse("There was an error processing your request. Please check your data.",
+                                        status=400)
+
+        # Store the review items in the session after validation
         request.session['order_review'] = items
 
-        # Proceed to render the review order template or handle as necessary
-        return render(request, 'orders/review_order.html', {'items': items})
+        # Redirect to avoid resubmission on page refresh
+        return redirect('review_order')  # Assuming there's a URL name 'review_order' configured
 
-    # Redirect or handle get requests differently
-    return redirect('list_items')  # Adjust as necessary
+    # If GET request or no items to review, redirect to the item listing page
+    return redirect('list_items')
 
 
-# Ensure MongoDB setup and submission logic is correctly implemented
+
+@login_required
+@require_POST
 def submit_order(request):
-    if request.method == 'POST':
-        # Assuming order details are stored in the session during review
-        order_items = request.session.get('order_review', [])
-        if not order_items:
-            return JsonResponse({'error': 'Session expired or order details missing.'}, status=400)
+    order_items = request.session.pop('order_review', None)
+    if not order_items:
+        return JsonResponse({'error': 'Session expired or order details missing.'}, status=400)
 
-        # MongoDB connection and order submission logic
-        uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
+    try:
+        client = MongoConnection.get_client()
         db = client['mydatabase']
         orders_collection = db['orders2']
 
-        # Create and save the order
         order = {
             'orders': order_items,
             'status': 'Received',
-            # Add any other necessary order details here
+            # Additional fields like 'date' and 'customer_id' can be included here
         }
-        order_id = orders_collection.insert_one(order).inserted_id
+        result = orders_collection.insert_one(order)
+        order_id = result.inserted_id
 
-        # Clear the session data for order review
-        del request.session['order_review']
+    except Exception as e:
+        # If there's an error in saving, re-add items to the session
+        request.session['order_review'] = order_items
+        return JsonResponse({'error': f'Failed to place order: {str(e)}'}, status=500)
 
-        client.close()
-
-        # Redirect to a confirmation page or return a success response
-        return JsonResponse({'message': 'Order submitted successfully', 'order_id': str(order_id)}, status=201)
-
-    else:
-        return redirect('list_items')
+    return JsonResponse({'message': 'Order submitted successfully', 'order_id': str(order_id)}, status=201)
 
 
-def inventory_with_6week_avg(request, warehouse_id):
+def inventory_with_6week_avg(request):
     try:
         uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
         client = MongoClient(uri)
@@ -1134,11 +694,9 @@ def inventory_with_6week_avg(request, warehouse_id):
     return render(request, 'inventory/inventory_with_avg.html', {'items_with_avg': items_with_avg})
 
 
-def inventory_visualization_view(request, warehouse_id):
+def inventory_visualization_view(request):
     selected_week = request.GET.get('week', 'Week 1')  # Default to 'Week 1' if not specified
-
-    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
+    client = MongoConnection.get_client()
     db = client['mydatabase']
     items_collection = db['items']
 
@@ -1161,16 +719,14 @@ def inventory_visualization_view(request, warehouse_id):
                  title=f'Transfers for {selected_week}')
     plot_div = fig.to_html(full_html=False)
 
-    client.close()
+    # client.close()
 
     return render(request, 'inventory/inventory_plot.html', {'plot_div': plot_div, 'selected_week': selected_week})
 
 
-def weekly_trend_view(request, warehouse_id, item_type):
+def weekly_trend_view(request, item_type):
     selected_week = request.GET.get('week', 'Week 1')  # Default to 'Week 1' if not specified
-
-    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
+    client = MongoConnection.get_client()
     db = client['mydatabase']
     items_collection = db['items']
 
@@ -1204,15 +760,13 @@ def weekly_trend_view(request, warehouse_id, item_type):
     plot_div = fig.to_html(full_html=False)
 
     # Close MongoDB connection and return the plot
-    client.close()
+    # client.close()
     return render(request, 'inventory/inventory_plot.html', {'plot_div': plot_div, 'item_type': item_type})
 
 
-def comparison_across_weeks_view(request, warehouse_id):
+def comparison_across_weeks_view(request):
     selected_week = request.GET.get('week', 'Week 1')  # Default to 'Week 1' if not specified
-
-    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
+    client = MongoConnection.get_client()
     db = client['mydatabase']
     items_collection = db['items']
 
@@ -1244,14 +798,13 @@ def comparison_across_weeks_view(request, warehouse_id):
     plot_div = fig.to_html(full_html=False)
 
     # Close MongoDB connection and return the plot
-    client.close()
+    # client.close()
     return render(request, 'inventory/inventory_plot.html', {'plot_div': plot_div})
 
 
 def update_order(request, order_id):
     if request.method == 'POST':
-        uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
+        client = MongoConnection.get_client()
         db = client['mydatabase']
         collection = db['orders']
 
@@ -1274,10 +827,10 @@ def update_order(request, order_id):
 
             if update_result.matched_count == 0:
                 # Handle case where no matching document was found
-                client.close()
+                # client.close()
                 return HttpResponse("Order not found.", status=404)
 
-        client.close()
+        # client.close()
         # Redirect to the order detail page or another appropriate page after the update
         return redirect('ops:detail_order_view', order_id=order_id)
     else:
@@ -1288,8 +841,7 @@ def update_order(request, order_id):
 @require_POST
 @csrf_exempt
 def add_items(request, order_id):
-    uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-    client = MongoClient(uri)
+    client = MongoConnection.get_client()
     db = client['mydatabase']
 
     # Parse the request body to JSON
@@ -1347,18 +899,14 @@ def update_builder(request, order_id):
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 
-
     try:
-        uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri)
+        client = MongoConnection.get_client()
         db = client['mydatabase']
         collection = db['orders']
         builder_name = request.POST.get('builder_name')
 
-        builder_name = request.POST.get('builder_name')
-
         if not builder_name:
-            return JsonResponse({'error': 'Missing builder_name'}, status=400)
+            return JsonResponse({'status': 'error', 'message': 'Missing builder_name'}, status=400)
 
         # Perform the update
         result = collection.update_one(
@@ -1369,19 +917,80 @@ def update_builder(request, order_id):
         if result.modified_count == 1:
             return JsonResponse({'status': 'success', 'message': 'Builder updated successfully'})
         else:
-            return JsonResponse({'status': 'error', 'message': 'Order not found or builder already set'}, status=404)
+            return JsonResponse({'status': 'error', 'message': 'Order not found or no update needed'}, status=404)
 
     except Exception as e:
-        # Log the error here
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-    else:
-        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
 
-def test_redis(request):
-    # Test writing to the cache
-    cache.set('hello', 'world', timeout=30)
-    # Test reading from cache
-    if cache.get('hello') == 'world':
-        return HttpResponse("Redis is working!")
-    else:
-        return HttpResponse("Redis is not working.", status=500)
+
+def create_order(request):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db.mapped_items
+
+    if request.method == 'GET':
+
+        routes = {
+            "RTC000003",
+            "RTC000013",
+            "RTC000018",
+            "RTC00019",
+            "RTC000089",
+            "RTC000377",
+            "RTC000379",
+            "RTC000649",
+            "RTC000700",
+            "RTC000719",
+            "RTC000004",
+            "RTC000127",
+            "RTC000433",
+            "RTC000647",
+            "RTC000720",
+            "RTC000730",
+            "RTC000731",
+            "RTC000765",
+            "RTC000783",
+            "RTC000764",
+            "RTC000002",
+        }
+
+        # Fetch items from MongoDB
+        items_cursor = collection.find()
+        items_by_type = {}
+        for item in items_cursor:
+            item_type = item.get('Type')
+            if item_type not in items_by_type:
+                items_by_type[item_type] = []
+            items_by_type[item_type].append(item)
+
+        # Passing items grouped by type to the template
+        return render(request, 'orders/create_order.html', {'items_by_type': items_by_type, 'routes': routes})
+
+    elif request.method == 'POST':
+        route_number = request.POST.get('routeNumber')
+        # Process item quantities and descriptions
+        order_items = []
+
+        for key, value in request.POST.items():
+            if key.startswith('quantity_') and value.isdigit() and int(value) > 0:
+                item_number = key.split('_')[1]
+                quantity = int(value)
+                description = request.POST.get('description_' + item_number)
+                order_items.append({'ItemNumber': item_number, 'ItemDescription': description, 'Quantity': quantity})
+
+        # Build order details dictionary
+        order_details = {
+            'route_name': route_number,
+            'route': route_number,
+            'pick_up_date': datetime.today(),  # Changed to store datetime object
+            'pick_up_time': '11:00 AM',
+            'total_cases': sum(item['Quantity'] for item in order_items),
+            'items': order_items,
+            'status': 'Pending',
+            'transfer_id': '0000'
+        }
+
+        # Save the order in MongoDB
+        db.orders.insert_one(order_details)
+        return render(request, 'orders/order_confirmation.html', {'order': order_details})
+

@@ -8,7 +8,6 @@ from django.shortcuts import render, redirect, get_object_or_404
 
 from account.forms import AccountAuthenticationForm, AccountUpdateForm, RegistrationForm
 from account.models import Account
-from merch.models import Request, Merch
 
 def home(request):
     return render(request, 'home.html')
