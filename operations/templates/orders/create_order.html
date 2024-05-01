@@ -33,9 +33,10 @@
             <ul class="list-unstyled">
               {% for item in items %}
                 <li class="mb-2">
-                  {{ item.Description }} ({{ item.Location }})
-                    <input type="number" name="quantity_{{ item.ItemNumber }}" min="0" class="form-control">
-                    <input type="hidden" name="description_{{ item.ItemNumber }}" value="{{ item.Description }}">
+                  {{ item.ItemDescription }} | {{ item.ItemNumber }} | {{ type }}
+                    <input type="number" name="quantity_{{ item.ItemNumber }}" min="0" class="form-control"
+                    value="{% if item.Quantity and item.Quantity > 0 %}{{ item.Quantity }}{% endif %}">
+                    <input type="hidden" name="description_{{ item.ItemNumber }}" value="{{ item.ItemDescription }}">
                 </li>
               {% endfor %}
             </ul>

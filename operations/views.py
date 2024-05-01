@@ -926,7 +926,7 @@ def update_builder(request, order_id):
 def create_order(request):
     client = MongoConnection.get_client()
     db = client['mydatabase']
-    collection = db.mapped_items
+    collection = db.items
 
     if request.method == 'GET':
 
@@ -958,7 +958,7 @@ def create_order(request):
         items_cursor = collection.find()
         items_by_type = {}
         for item in items_cursor:
-            item_type = item.get('Type')
+            item_type = item.get('ItemType')
             if item_type not in items_by_type:
                 items_by_type[item_type] = []
             items_by_type[item_type].append(item)
@@ -973,10 +973,10 @@ def create_order(request):
 
         for key, value in request.POST.items():
             if key.startswith('quantity_') and value.isdigit() and int(value) > 0:
-                item_number = key.split('_')[1]
-                quantity = int(value)
-                description = request.POST.get('description_' + item_number)
-                order_items.append({'ItemNumber': item_number, 'ItemDescription': description, 'Quantity': quantity})
+                ItemNumber = key.split('_')[1]
+                Quantity = int(value)
+                ItemDescription = request.POST.get('description_' + ItemNumber)
+                order_items.append({'ItemNumber': ItemNumber, 'ItemDescription': ItemDescription, 'Quantity': Quantity})
 
         # Build order details dictionary
         order_details = {
