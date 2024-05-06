@@ -227,7 +227,6 @@ def orders_view(request):
         "RTC000002",
     }
 
-
     # Building the query based on the filters
     query = {}
     if date:
@@ -298,6 +297,26 @@ def process_order_edits(request, order, collection):
     collection.update_one({'_id': ObjectId(order['id'])}, {'$set': {'items': order['items']}})
 
 
+def fetch_item_ordering(client, db_name='mydatabase', collection_name='items'):
+    db = client[db_name]
+    collection = db[collection_name]
+    items_ordering = {}
+    try:
+        cursor = collection.find({})
+        for item in cursor:
+            item_number = str(item.get('ItemNumber'))
+            order = int(item.get('Orderby', float('inf')))  # Convert to int, use float('inf') as default
+            items_ordering[item_number] = order
+    except Exception as e:
+        print(f"Failed to fetch item ordering: {e}")
+    return items_ordering
+
+
+def reorder_items(items, items_ordering):
+    items.sort(key=lambda x: items_ordering.get(x['ItemNumber'], float('inf')))
+    return items
+
+
 @login_required
 def generate_order_pdf(request, order_id):
     client = MongoConnection.get_client()
@@ -327,6 +346,12 @@ def generate_order_pdf(request, order_id):
 
     order = collection.find_one({'_id': ObjectId(order_id)})
 
+    # Fetch item ordering from the 'items' collection
+    items_ordering = fetch_item_ordering(client, 'mydatabase', 'items')
+
+    # Reorder the items in the order based on the 'Orderby' field
+    ordered_items = reorder_items(order.get('items', []), items_ordering)
+
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="order_{order_id}.pdf"'
 
@@ -338,7 +363,7 @@ def generate_order_pdf(request, order_id):
     adjusted_total_quantity = 0
 
     # Calculate totals
-    for item in order.get('items', []):
+    for item in ordered_items:
         try:
             quantity = int(item.get('Quantity', 0))
         except:
@@ -393,14 +418,18 @@ def generate_order_pdf(request, order_id):
     # Adjust y_position for first item row
     y_position -= 20
 
-    for item in order.get('items', []):
+    for item in ordered_items:
+        quantity = item.get('Quantity', 0)
+
+        # Skip items with no quantity or quantity set to 0
+        if not quantity:
+            continue
 
         # Draw a line to separate this item from the next
         p.line(30, y_position - 2, 580, y_position - 2)  # Adjust line length as needed
 
         item_number = item.get('ItemNumber', 'Unknown')
         description = item.get('ItemDescription', 'N/A')
-        quantity = item.get('Quantity', 0)
         stock_status = "IS" if item_number not in oos_items else "OOS"
 
         # Drawing item details (keep this part unchanged)
@@ -621,7 +650,6 @@ def review_order_view(request):
     return redirect('list_items')
 
 
-
 @login_required
 @require_POST
 def submit_order(request):
@@ -664,25 +692,35 @@ def inventory_with_6week_avg(request):
 
         items_with_avg = []
         for inventory_item in inventory_items:
-            item_name = inventory_item.get('ItemName')
-            item_data = items_collection.find_one({'ItemDescription': item_name})
+            item_num = inventory_item.get('ItemNumber')
+            item_data = items_collection.find_one({'ItemNumber': item_num})
             if item_data:
-                # Calculate the 6-week average sales or usage
-                six_week_avg = round(abs(item_data.get('AVG', 0)), 1)
+                avg_value = item_data.get('AVG', 0)
 
-                # Calculate current inventory cases
-                current_cases = round(int(inventory_item.get('Cases', 0)), 1)
+                # Check if AVG is NaN or not a valid number and handle it
+                try:
+                    avg = round(float(avg_value) if avg_value is not str else 0,1)
+                except ValueError:
+                    avg = 0
+
+                try:
+                    current_cases = int(inventory_item.get('Cases', 0))
+                except ValueError:
+                    current_cases = 0
 
                 # Calculate weeks of supply based on the six_week_avg; prevent division by zero
-                weeks_of_supply = current_cases / -(six_week_avg) if six_week_avg else 'N/A'
+                try:
+                    weeks_of_supply = current_cases / -avg if avg is not str else 'N/A'
+                except:
+                    weeks_of_supply = 0
 
                 wos = round(abs(weeks_of_supply), 1)
 
                 items_with_avg.append({
-                    'ItemName': item_name,
-                    'ItemNumber': int(item_data.get('ItemNumber')),
+                    'ItemName': item_data.get('ItemDescription'),
+                    'ItemNumber': item_num,
                     'Cases': current_cases,
-                    'SixWeekAvg': six_week_avg,
+                    'avg': avg,
                     'WeeksOfSupply': wos
                 })
 
@@ -852,6 +890,9 @@ def add_items(request, order_id):
 
     selected_items_with_quantities = data.get('selected_items', [])
 
+    if not selected_items_with_quantities:
+        return JsonResponse({'error': 'No items provided'}, status=400)
+
     # Fetch and prepare items to be added
     items_to_add = []
     for item in selected_items_with_quantities:
@@ -859,23 +900,18 @@ def add_items(request, order_id):
         quantity = item.get('quantity')
         description = item.get('description')  # This is coming from the frontend.
 
-        # Construct the item object according to the correct schema.
-        item_to_add = {
-            "ItemNumber": item_number,
-            "ItemDescription": description,  # Ensure this matches your DB schema.
-            "Quantity": int(quantity)
-        }
-
-        items_to_add.append(item_to_add)
-
-    # Update the order document by appending the items with quantities
-    update_result = db['orders'].update_one(
-        {"_id": ObjectId(order_id)},
-        {"$push": {"items": {"$each": items_to_add}}}
-    )
+        # Ensure all required fields are present
+        if item_number and quantity and description:
+            # Construct the item object according to the correct schema.
+            item_to_add = {
+                "ItemNumber": item_number,
+                "ItemDescription": description,  # Ensure this matches your DB schema.
+                "Quantity": int(quantity)
+            }
+            items_to_add.append(item_to_add)
 
     if not items_to_add:
-        return JsonResponse({'error': 'No valid items found with the provided ItemNumbers'}, status=404)
+        return JsonResponse({'error': 'No valid items to add'}, status=404)
 
     # Update the order document by appending the items with quantities
     update_result = db['orders'].update_one(
@@ -887,6 +923,34 @@ def add_items(request, order_id):
         return JsonResponse({'error': 'Order not found or no new items added'}, status=404)
 
     return JsonResponse({'success': True, 'message': 'Items successfully added to the order'})
+
+
+@require_POST
+@csrf_exempt
+def delete_item(request, order_id):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+
+    # Parse the request body to JSON
+    try:
+        data = json.loads(request.body)
+        item_number = data.get('itemNumber')
+    except json.JSONDecodeError as e:
+        return JsonResponse({'error': f'Invalid JSON format: {str(e)}'}, status=400)
+
+    if not item_number:
+        return JsonResponse({'error': 'Item number is required'}, status=400)
+
+    # Update the order document by removing the item
+    update_result = db['orders'].update_one(
+        {"_id": ObjectId(order_id)},
+        {"$pull": {"items": {"ItemNumber": item_number}}}
+    )
+
+    if update_result.modified_count == 0:
+        return JsonResponse({'error': 'Order not found or item not found'}, status=404)
+
+    return JsonResponse({'success': True, 'message': 'Item successfully deleted from the order'})
 
 
 @csrf_exempt
@@ -903,10 +967,12 @@ def update_builder(request, order_id):
         client = MongoConnection.get_client()
         db = client['mydatabase']
         collection = db['orders']
-        builder_name = request.POST.get('builder_name')
 
-        if not builder_name:
-            return JsonResponse({'status': 'error', 'message': 'Missing builder_name'}, status=400)
+        try:
+            data = json.loads(request.body)
+            builder_name = data.get('builder_name')
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': 'Missing builder_name' + e}, status=400)
 
         # Perform the update
         result = collection.update_one(
@@ -993,4 +1059,3 @@ def create_order(request):
         # Save the order in MongoDB
         db.orders.insert_one(order_details)
         return render(request, 'orders/order_confirmation.html', {'order': order_details})
-

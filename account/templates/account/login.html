@@ -43,26 +43,40 @@
 
                     <br>
 
-                        <form method="post" action="{% url 'account:login' %}">
-                          {% csrf_token %}
-                          <table>
-                            <tr>
-                                <input type="text" class="form-control form-control-lg" placeholder = "Email" name="username"/>
-                                <label class="form-label" for="typeEmailX">Email</label>
-                            </tr>
-                            <tr>
-                                <input type="password" id="password" class="form-control form-control-lg" placeholder = "Password" name="password" />
-                                 <label class="form-label" for="typePasswordX">Password</label>
+                <div class="container">
+                    <div class="row justify-content-center">
+                        <div class="col-md-12">
+                            <form method="post" action="{% url 'account:login' %}">
+                                {% csrf_token %}
+                                <table class="table">
+                                    <tr>
+                                        <td>
+                                            <!-- Username Input Field -->
+                                            <input type="text" class="form-control form-control-lg" placeholder="Email" name="username" id="username" required />
+                                            <label class="form-label" for="username">Email</label>
+                                        </td>
 
-                            </tr>
-                          </table>
+                                        <td>
+                                            <!-- Password Input Field -->
+                                            <input type="password" id="password" class="form-control form-control-lg" placeholder="Password" name="password" required />
+                                            <label class="form-label" for="password">Password</label>
+                                        </td>
+                                    </tr>
+                                </table>
+                                <!-- Hidden field for 'next' URL -->
+                                <input type="hidden" name="next" value="{{ request.GET.next|default:'' }}">
+                                <br>
+                                <!-- Login Button -->
+                                <div class="text-center"> <!-- Centering the button -->
+                                    <button class="btn btn-outline-light btn-lg px-5" type="submit">Login</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
 
-            {#                <p class="small mb-5 pb-lg-2"><a class="text-white-50" href="#!">Forgot password?</a></p>#}
-                             <br>
 
-                              <button class="btn btn-outline-light btn-lg px-5 " value="{{ next }} type="submit">Login</button>
 
-                        </form>
 
 
                     </div>

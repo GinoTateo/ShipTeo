@@ -15,7 +15,7 @@ class MyAccountManager(BaseUserManager):
             raise ValueError("Users must have a username")
         user = self.model(
             email=self.normalize_email(email),
-            username=username
+            username=username.lower(),  # Save the username in lowercase
         )
         user.set_password(password)
         user.save(using=self.db)
@@ -24,7 +24,7 @@ class MyAccountManager(BaseUserManager):
     def create_superuser(self, email, username, password):
         user = self.create_user(
             email=self.normalize_email(email),
-            username=username,
+            username=username.lower(),  # Save the username in lowercase
             password=password,
         )
         user.is_admin = True

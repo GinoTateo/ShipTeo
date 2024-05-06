@@ -5,6 +5,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils.http import is_safe_url
 
 from account.forms import AccountAuthenticationForm, AccountUpdateForm, RegistrationForm
 from account.models import Account
@@ -12,23 +13,34 @@ from account.models import Account
 def home(request):
     return render(request, 'home.html')
 
+
 def login_view(request, *args, **kwargs):
+    # Get 'next' parameter from the request for both GET and POST
+    next_url = request.POST.get('next') or request.GET.get('next')
+
+
     if request.method == "POST":
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
-            username = form.cleaned_data.get('username')
+            username = form.cleaned_data.get('username').lower()  # Assume username case-insensitivity
             password = form.cleaned_data.get('password')
-            user = authenticate(username=username, password=password)
-            if user is not None:
+            user = authenticate(request, username=username, password=password)
+            if user:
                 login(request, user)
                 messages.info(request, f"You are now logged in as {user}.")
-                return redirect("home")
+                if next_url and is_safe_url(next_url, allowed_hosts={request.get_host()}):
+                    return redirect(next_url)
+                else:
+                    print(f"Unsafe or missing next URL: {next_url}")
+                    return redirect("home")
             else:
                 messages.error(request, "Invalid username or password.")
         else:
             messages.error(request, "Invalid username or password.")
-    form = AuthenticationForm()
-    return render(request=request, template_name="account/login.html", context={"login_form": form})
+    else:
+        form = AuthenticationForm()
+
+    return render(request, "account/login.html", {"login_form": form, "next": next_url})
 
 
 def get_redirect_if_exists(request):
@@ -59,7 +71,6 @@ def account(request, *args, **kwargs):
         context['id'] = account.id
         context['username'] = account.username
         context['email'] = account.email
-        context['profile_image'] = account.profile_image.url
         context['hide_email'] = account.hide_email
 
         return render(request, "account/account.html", context)

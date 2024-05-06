@@ -19,28 +19,52 @@
                 <h2 class="card-title">{{ order.route }}</h2>
                 <h4 class="card-subtitle mb-2 text-muted">{{ order.pick_up_date|date:"F j, Y" }}</h4>
                 <!-- Order Details Section -->
-                <div class="mt-3">
-                    <p><strong>Total Cases:</strong> {{ order.total_cases }}</p>
-                    <p><strong>Pick-up Time:</strong> {{ order.pick_up_time }}</p>
-                    <p><strong>Status:</strong> {{ order.status }}</p>
-                    <p><strong>Order Builder:</strong> {{ order.builder_name|default:"Not Assigned" }}</p>
-                </div>
+                <div class="px-3 my-3">
+                            <p class="mb-2"><strong>Total Items:</strong> {{ order.total_cases }}</p>
+                            {% if order.status == 'Pending' %} <p></p> {% endif %} <p><strong>Builder:</strong> {{ order.builder_name }}</p>
+                            <p class="mb-2" ><strong>Status:</strong> <span class="{% if order.status == 'Complete' %}badge badge-success{% elif order.status == 'Preparing' %}badge badge-info{% else %}badge badge-secondary{% endif %}"> {{ order.status }} </span> </p>
+
+                        </div>
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="/ops/warehouse/order" class="btn btn-danger">Back</a>
-                    <div class="button-group">
-                        <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addItemModal">Add</button>
-                        <button id="editUpdateButton" type="button" class="btn btn-primary">Edit</button>
-                        <a href="pdf/" class="btn btn-primary">Print</a>
-                        <a href="verify/" class="btn btn-primary">Verify</a>
-                        {% if order.status == "Pending" %}
-                            <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#prepareOrderModal">Prepare</button>
-                        {% elif order.status == "Preparing" %}
-                            <a href="complete" class="btn btn-success">Complete</a>
-                        {% endif %}
-                    </div>
-                </div>
+    <a href="/ops/warehouse/order" class="btn btn-danger">Back</a>
+    <div class="dropdown">
+        <button class="btn btn-primary dropdown-toggle" type="button" id="actionMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Actions
+        </button>
+        <div class="dropdown-menu" aria-labelledby="actionMenuButton">
+
+            <button class="dropdown-item" id="editUpdateButton" type="button">Edit</button>
+            <a class="dropdown-item" href="pdf/">Print</a>
+            <a class="dropdown-item" href="verify/">Verify</a>
+            {% if order.status == "Pending" %}
+                <button class="dropdown-item" type="button" data-toggle="modal" data-target="#prepareOrderModal">Prepare</button>
+            {% elif order.status == "Preparing" %}
+                <button type="button" class="btn btn-success complete-order" data-order-id="{{ order.order_id }}">Complete</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
             </div>
         </div>
+
+<div class="container mt-5">
+
+    <div class="card mb-3 edit-mode-card" style="display: none;">
+        <div class="card-body">
+            <h4 class="card-title">Edit Mode Activated</h4>
+            <p class="card-text">You are now in edit mode. Click update to save or cancel to discard changes.</p>
+
+            <div class="btn" role="group" aria-label="Edit Mode Actions">
+                <button type="button" class="btn btn-success" data-toggle="modal" data-target="#addItemModal">Add</button>
+                <button type="button" class="btn btn-primary" id="editUpdateButton" data-editing="true">Update </button>
+                <button type="button" class="btn btn-secondary" onclick="cancelEditMode()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rest of your content -->
+</div>
 
         <form id="orderForm" method="POST" action="update/" class="needs-validation" novalidate>
             {% csrf_token %}
@@ -55,6 +79,7 @@
                                 <label>Quantity
                                     <input type="number" class="form-control" name="items_{{ forloop.counter0 }}_Quantity" value="{{ item.Quantity }}" readonly>
                                 </label>
+                                <button type="button" class="btn btn-danger delete-item" data-item-number="{{ item.ItemNumber }}" style="display: none;">Delete</button>
                             </div>
                             <!-- Add other fields as necessary -->
                         </div>
@@ -129,29 +154,114 @@
     </div>
   </div>
 </div>
+</body>
 
 <script>
+
+    $('.complete-order').click(function() {
+        var orderId = $(this).data('order-id');
+        var button = $(this);
+        var article = button.closest('article');
+
+        $.ajax({
+            url: '/ops/warehouse/order/' + orderId + '/complete/',
+            type: 'POST',
+            data: {
+                'order_id': orderId,
+                'csrfmiddlewaretoken': $('input[name="csrfmiddlewaretoken"]').val()
+            },
+            headers: {
+                'X-CSRFToken': $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function(response) {
+              var statusBadge = article.find('.badge');
+                if (statusBadge.length) {
+                    statusBadge.removeClass('badge-secondary badge-info').addClass('badge-success').text('Complete');
+                }
+                button.remove(); // Remove or disable the button
+            },
+            error: function(xhr, status, error) {
+                console.error('Error completing order:', error);
+                alert('Could not complete the order. Please try again.');
+            }
+        });
+    });
+
+    function cancelEditMode() {
+    var editButton = document.getElementById('editUpdateButton');
+    var editModeCard = document.querySelector('.edit-mode-card');
+    var deleteButtons = document.querySelectorAll('.delete-item');
+    var quantityInputs = document.querySelectorAll('input[name^="items_"][name$="_Quantity"]');
+
+    // Reset inputs to original values (optional, see note below)
+    quantityInputs.forEach(input => {
+        input.value = input.defaultValue;  // Reset input to its default value if needed
+        input.setAttribute('readonly', true);
+        input.classList.remove('editable');
+    });
+
+    // Hide delete buttons and edit mode card
+    deleteButtons.forEach(button => button.style.display = 'none');
+    editModeCard.style.display = 'none';
+
+    // Update button text and attributes
+    editButton.textContent = 'Edit';
+    editButton.removeAttribute('data-editing');
+}
+
+document.getElementById('editUpdateButton').addEventListener('click', function() {
+    var isEditing = this.getAttribute('data-editing') !== 'true';
+    toggleEditMode(isEditing);
+});
+
 document.getElementById('editUpdateButton').addEventListener('click', function() {
     var form = document.getElementById('orderForm');
-    var addItemsButton = document.querySelector('.btn-info[data-target="#addItemModal"]'); // Get the Add button
     var isEditing = this.getAttribute('data-editing') !== 'true';
+    var deleteButtons = document.querySelectorAll('.delete-item'); // Get all delete buttons
+    var editModeCard = document.querySelector('.edit-mode-card');
+    var quantityInputs = document.querySelectorAll('input[name^="items_"][name$="_Quantity"]');
 
     if (isEditing) {
         // Enable editing
-        var quantityInputs = document.querySelectorAll('input[name^="items_"][name$="_Quantity"]');
         quantityInputs.forEach(function(input) {
             input.removeAttribute('readonly');
             input.classList.add('editable');
         });
-        this.textContent = 'Update'; // Change button text to "Update"
+
+        // Show delete buttons and edit mode notification card
+        deleteButtons.forEach(function(button) {
+            button.style.display = 'inline-block';
+        });
+
+        editModeCard.style.display = 'block'; // Show the edit mode card only once
         this.setAttribute('data-editing', 'true');
-        addItemsButton.style.display = 'inline-block'; // Show the Add button
     } else {
-        // Submit form and switch out of edit mode
-        form.submit();
-        addItemsButton.style.display = 'none'; // Hide the Add button
+        // Switch out of edit mode without submitting the form if cancelling
+        quantityInputs.forEach(function(input) {
+            input.setAttribute('readonly', true);
+            input.classList.remove('editable');
+        });
+
+        // Hide delete buttons and edit mode notification card
+        deleteButtons.forEach(function(button) {
+            button.style.display = 'none';
+        });
+
+        editModeCard.style.display = 'none'; // Hide the edit mode card
+        this.textContent = 'Edit'; // Change button text back to "Edit"
+        this.removeAttribute('data-editing');
     }
 });
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    var isEditing = document.getElementById('editUpdateButton').getAttribute('data-editing') === 'true';
+    var deleteButtons = document.querySelectorAll('.delete-item');
+    deleteButtons.forEach(function(button) {
+        button.style.display = isEditing ? 'inline-block' : 'none'; // Set visibility based on edit mode
+    });
+});
+
 
 document.getElementById('orderForm').addEventListener('submit', function() {
     var quantityInputs = document.querySelectorAll('input[name^="items_"][name$="_Quantity"]');
@@ -163,15 +273,14 @@ document.getElementById('orderForm').addEventListener('submit', function() {
     button.textContent = 'Edit'; // Change button text back to "Edit"
     button.removeAttribute('data-editing');
 });
-</script>
 
-<script>
 document.getElementById('confirmAddItems').addEventListener('click', function() {
     let itemsToAdd = [];
     document.querySelectorAll('.quantity-input').forEach(function(input) {
         let quantity = input.value;
         let itemNumber = input.getAttribute('data-item-number');
         let itemDescription = input.getAttribute('data-item-description');
+
 
         if (quantity > 0) { // Check if the quantity is greater than 0
             itemsToAdd.push({
@@ -224,8 +333,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+document.querySelectorAll('.delete-item').forEach(button => {
+    button.addEventListener('click', function() {
+        const itemNumber = this.getAttribute('data-item-number');
+        if (confirm('Are you sure you want to delete this item?')) {
+            fetch('api/delete_item/' + order_id + itemNumber, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': $('input[name="csrfmiddlewaretoken"]').val()
+                },
+                body: JSON.stringify({itemNumber: itemNumber})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload(); // Reload the page to update the list
+                } else {
+                    alert(data.error);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    });
+});
+
 </script>
 
-
-</body>
 </html>

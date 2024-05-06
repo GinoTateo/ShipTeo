@@ -44,4 +44,5 @@ urlpatterns = [
     # API
     path('api/trigger-process-order/', views.trigger_process_order, name='trigger_process_order'),
     path('api/update-builder/<str:order_id>/', views.update_builder, name='update_builder'),
+    path('api/delete-item/<str:item_id>/', views.update_builder, name='update_builder'),
 ]

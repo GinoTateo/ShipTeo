@@ -21,6 +21,7 @@ from cloudinary.uploader import upload
 from cloudinary.utils import cloudinary_url
 from django.core.cache import cache
 
+from account import backend
 from operations.templatetags import custom_filters
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
