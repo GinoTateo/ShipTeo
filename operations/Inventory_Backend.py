@@ -3,6 +3,7 @@ import email
 import os
 from email.policy import default
 import fitz  # PyMuPDF
+from dotenv import load_dotenv
 from pymongo import MongoClient
 import re
 
@@ -44,7 +45,6 @@ def parse_inventory_pdf(pdf_bytes):
     text = ""
     for page in doc:
         text += page.get_text("text")
-    doc.close()
 
     lines = text.split('\n')
     item_pattern = re.compile(r'^(\d+) - (\w[\w\s.-]+)')
@@ -203,11 +203,10 @@ def generate_and_save_inventory_stats(client):
 
     except Exception as e:
         print(f"An error occurred: {e}")
-    finally:
-        client.close()
 
 
 def inventory_main():
+    load_dotenv()  # This method will load variables from a .env file
 
     email_address = os.getenv('EMAIL_ADDRESS')
     password = os.getenv('EMAIL_PASSWORD')
@@ -215,5 +214,5 @@ def inventory_main():
     client = MongoClient(db_uri)
 
     process_inventory_emails(email_address, password, client)
-    identify_and_upload_oos_items()
-    generate_and_save_inventory_stats()
+    identify_and_upload_oos_items(client)
+    generate_and_save_inventory_stats(client)

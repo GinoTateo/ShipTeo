@@ -1,5 +1,7 @@
 import os
 import email as email_lib
+
+from dotenv import load_dotenv
 from pymongo import MongoClient
 import imaplib
 from email import policy
@@ -325,7 +327,7 @@ def parse_and_reorder_email(email_content, client):
 # check_and_parse_new_emails('your_email@gmail.com', 'your_password', client)
 
 def order_main():
-
+    load_dotenv()  # This method will load variables from a .env file
 
     email = os.getenv('EMAIL_ADDRESS')
     password = os.getenv('EMAIL_PASSWORD')
