@@ -1,6 +1,6 @@
 from django.urls import path
 from operations import views
-from operations.views import place_order_view, list_items_view
+from operations.views import place_order_view
 
 app_name = "ops"
 
@@ -43,6 +43,7 @@ urlpatterns = [
 
     # API
     path('api/trigger-process-order/', views.trigger_process_order, name='trigger_process_order'),
+    path('api/trigger-process-inventory/', views.trigger_process_inventory, name='trigger_process_inventory'),
     path('api/update-builder/<str:order_id>/', views.update_builder, name='update_builder'),
     path('api/delete-item/<str:item_id>/', views.update_builder, name='update_builder'),
 ]

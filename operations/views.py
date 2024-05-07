@@ -18,7 +18,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from pymongo import MongoClient
 from reportlab.lib.pagesizes import letter
-from operations.email_parse_util import main
+
+from operations.Inventory_Backend import inventory_main
+from operations.Order_Backend import order_main
 from django.core.paginator import Paginator
 
 # Constants
@@ -361,16 +363,29 @@ def generate_order_pdf(request, order_id):
     # Initialize totals
     total_quantity = 0
     adjusted_total_quantity = 0
+    type_counts = {}
 
-    # Calculate totals
     for item in ordered_items:
+        item_number = item.get('ItemNumber', '')
         try:
             quantity = int(item.get('Quantity', 0))
-        except:
-            quantity = 0;
-        total_quantity += quantity
-        if item.get('ItemNumber', '') not in oos_items:
-            adjusted_total_quantity += quantity
+            total_quantity += quantity  # Add to total quantity
+            if item_number not in oos_items:
+                adjusted_total_quantity += quantity  # Add to adjusted total if not OOS
+
+            # Fetch item type using the item number, default to "Other" if not found
+            item_type = item_to_type.get(item_number, "Other")
+            # Extract the type key assuming it starts with letters followed by numbers (e.g., 'PG10')
+
+            # Calculate type-specific statistics
+            if item_type != "Other":
+                if item_type in type_counts:
+                    type_counts[item_type] += quantity
+                else:
+                    type_counts[item_type] = quantity
+        except ValueError:
+            # Log error or handle the case where the quantity is not an integer
+            print(f"Warning: Invalid quantity '{item.get('Quantity')}' for item number {item_number}")
 
     p.setFont("Helvetica-Bold", 12)
     formatted_date = order.get('pick_up_date').strftime('%B %d, %Y')
@@ -463,6 +478,56 @@ def generate_order_pdf(request, order_id):
         if y_position < 50:
             p.showPage()
             y_position = height - 50
+
+    # Define the start position for the statistics section on the page
+    y_position = max(50, y_position - 20)  # Ensure there's space or create a new page if needed
+    x_position_start = 30  # Start at the left margin
+    x_increment = 100  # Increment x position for each statistic, adjust as necessary based on your page width
+
+    # Calculate the starting y position for the statistics, ensuring there's space for headers and counts
+    y_position = max(50, y_position - 40)  # Move up from the last item or set at a minimum if near page end
+    x_position_start = 30  # Start at the left margin of the page
+    total_types = len(type_counts)
+
+    # Calculate even spacing across the page
+    space_between = (width - 20) / total_types  # Subtract margins and divide by number of types
+
+    # Set initial x position
+    x_position = x_position_start
+
+    if route_number in ship_to_routes:
+        # Draw bold column headers for each item type
+        p.setFont("Helvetica-Bold", 12)  # Set font to bold for headers
+        for type_key in type_counts.keys():
+            p.drawString(x_position, y_position, type_key)
+            x_position += space_between  # Move to next column position
+
+        # Move down to place counts under headers
+        y_position -= 20
+        x_position = x_position_start  # Reset to start position
+
+        # Draw counts under each header
+        p.setFont("Helvetica", 12)  # Set font to normal for counts
+        for type_key, count in type_counts.items():
+            # Determine the divisor for the type
+            divisor = 1  # Default divisor
+            if type_key in ['PG10', 'PW10','SG12','SW12','SW18',]:
+                divisor = 25
+            elif type_key in ['PG18', 'K10', 'K22','IW', 'PW18']:
+                divisor = 20
+            elif type_key == 'PC':
+                divisor = 19
+            elif type_key == 'MLT':
+                divisor = 23
+            elif type_key == 'K32':
+                divisor = 15
+            elif type_key == 'K48':
+                divisor = 10
+
+            # Calculate and format the adjusted count
+            formatted_count = round(count / divisor, 1)
+            p.drawString(x_position, y_position, str(formatted_count) + " ")
+            x_position += space_between  # Move to next column position
 
     p.setTitle(route_number)
     p.showPage()
@@ -955,7 +1020,12 @@ def delete_item(request, order_id):
 
 @csrf_exempt
 def trigger_process_order(request):
-    response_data = main()
+    response_data = order_main()
+    return JsonResponse(response_data, safe=False)
+
+@csrf_exempt
+def trigger_process_inventory(request):
+    response_data = inventory_main()
     return JsonResponse(response_data, safe=False)
 
 
