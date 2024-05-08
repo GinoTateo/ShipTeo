@@ -40,10 +40,11 @@ urlpatterns = [
     # Edit Orders
     path('warehouse/order/<str:order_id>/update/', views.update_order, name='update_order'),
     path('warehouse/order/<str:order_id>/add/items/', views.add_items, name='add_items'),
+    path('warehouse/order/<str:order_id>/delete/', views.delete_order, name='delete_order'),
 
     # API
     path('api/trigger-process-order/', views.trigger_process_order, name='trigger_process_order'),
     path('api/trigger-process-inventory/', views.trigger_process_inventory, name='trigger_process_inventory'),
     path('api/update-builder/<str:order_id>/', views.update_builder, name='update_builder'),
-    path('api/delete-item/<str:item_id>/', views.update_builder, name='update_builder'),
+    path('api/delete-item/<str:item_id>/', views.update_builder, name='delete_item'),
 ]

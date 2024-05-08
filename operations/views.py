@@ -207,10 +207,10 @@ def orders_view(request):
 
     routes = {
         "RTC000003",
-        "RTC000013",
-        "RTC000018",
+        "RTC00013",
+        "RTC00018",
         "RTC00019",
-        "RTC000089",
+        "RTC00089",
         "RTC000377",
         "RTC000379",
         "RTC000649",
@@ -241,7 +241,7 @@ def orders_view(request):
         query['route'] = route
 
     # Sort orders by date descending to get the newest orders first
-    orders = list(collection.find(query).sort("pick_up_date", -1))
+    orders = list(collection.find().sort('$natural', -1))
 
     for order in orders:
         order['order_id'] = str(order['_id'])
@@ -1129,3 +1129,23 @@ def create_order(request):
         # Save the order in MongoDB
         db.orders.insert_one(order_details)
         return render(request, 'orders/order_confirmation.html', {'order': order_details})
+
+
+@login_required
+def delete_order(request, order_id):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db['orders']
+
+    print(order_id)
+
+    # Ensure the request method is POST to handle deletions
+    if request.method == 'POST':
+        order = collection.delete_one({'_id': ObjectId(order_id)})
+        if order.deleted_count > 0:
+            print(f"Order {order_id} deleted successfully.")
+        else:
+            print(f"Order {order_id} not found.")
+        return HttpResponseRedirect(reverse('ops:order_view'))
+    else:
+        return HttpResponseRedirect(reverse('order_detail_view', args=[order_id]))

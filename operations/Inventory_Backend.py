@@ -108,7 +108,7 @@ def save_inventory_to_mongodb(inventory_data, client):
     else:
         print("No inventory items to save.")
 
-    client.close()
+
 
 
 def process_inventory_emails(email_address, password, client):
@@ -216,3 +216,4 @@ def inventory_main():
     process_inventory_emails(email_address, password, client)
     identify_and_upload_oos_items(client)
     generate_and_save_inventory_stats(client)
+    client.close()

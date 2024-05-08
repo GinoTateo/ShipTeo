@@ -208,10 +208,12 @@ def insert_order_into_mongodb(extracted_data, client, db_name='mydatabase', orde
         pick_up_date = extracted_data.get('pick_up_date')
 
     total_cases = sum(item.get('Quantity', 0) for item in extracted_data.get('items', []))
+    order_submitted = datetime.today()
 
     order_document = {
         'route_name': extracted_data.get('route_name'),
         'route': extracted_data.get('route_number'),
+        'order_submitted': order_submitted,
         'pick_up_date': pick_up_date,
         'pick_up_time': extracted_data.get('pick_up_time'),
         'total_cases': total_cases,

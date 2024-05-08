@@ -35,12 +35,17 @@
 
             <button class="dropdown-item" id="editUpdateButton" type="button">Edit</button>
             <a class="dropdown-item" href="pdf/">Print</a>
-            <a class="dropdown-item" href="verify/">Verify</a>
             {% if order.status == "Pending" %}
                 <button class="dropdown-item" type="button" data-toggle="modal" data-target="#prepareOrderModal">Prepare</button>
             {% elif order.status == "Preparing" %}
                 <button type="button" class="btn btn-success complete-order" data-order-id="{{ order.order_id }}">Complete</button>
             {% endif %}
+
+            <form action="delete/" method="POST">
+            {% csrf_token %}
+                <button type="submit" class="btn text-danger">Delete</button>
+            </form>
+
         </div>
     </div>
 </div>
@@ -59,6 +64,7 @@
                 <button type="button" class="btn btn-success" data-toggle="modal" data-target="#addItemModal">Add</button>
                 <button type="button" class="btn btn-primary" id="editUpdateButton" data-editing="true">Update </button>
                 <button type="button" class="btn btn-secondary" onclick="cancelEditMode()">Cancel</button>
+
             </div>
         </div>
     </div>
@@ -357,6 +363,13 @@ document.querySelectorAll('.delete-item').forEach(button => {
         }
     });
 });
+
+document.querySelector('form').addEventListener('submit', function(event) {
+    if (!confirm('Are you sure you want to delete this order?')) {
+        event.preventDefault(); // Stop the form from submitting
+    }
+});
+
 
 </script>
 
