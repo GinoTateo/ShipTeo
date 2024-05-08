@@ -8,10 +8,10 @@ import plotly.express as px
 from bson.objectid import ObjectId
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.http import HttpResponseRedirect
 from django.http import JsonResponse, Http404
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
@@ -511,9 +511,9 @@ def generate_order_pdf(request, order_id):
         for type_key, count in type_counts.items():
             # Determine the divisor for the type
             divisor = 1  # Default divisor
-            if type_key in ['PG10', 'PW10','SG12','SW12','SW18',]:
+            if type_key in ['PG10', 'PW10', 'SG12', 'SW12', 'SW18', ]:
                 divisor = 25
-            elif type_key in ['PG18', 'K10', 'K22','IW', 'PW18']:
+            elif type_key in ['PG18', 'K10', 'K22', 'IW', 'PW18']:
                 divisor = 20
             elif type_key == 'PC':
                 divisor = 19
@@ -764,7 +764,7 @@ def inventory_with_6week_avg(request):
 
                 # Check if AVG is NaN or not a valid number and handle it
                 try:
-                    avg = round(float(avg_value) if avg_value is not str else 0,1)
+                    avg = round(float(avg_value) if avg_value is not str else 0, 1)
                 except ValueError:
                     avg = 0
 
@@ -1023,6 +1023,7 @@ def trigger_process_order(request):
     response_data = order_main()
     return JsonResponse(response_data, safe=False)
 
+
 @csrf_exempt
 def trigger_process_inventory(request):
     response_data = inventory_main()
@@ -1149,3 +1150,89 @@ def delete_order(request, order_id):
         return HttpResponseRedirect(reverse('ops:order_view'))
     else:
         return HttpResponseRedirect(reverse('order_detail_view', args=[order_id]))
+
+
+@login_required
+def rsr_orders_view(request):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db['orders']
+
+    # Retrieve the route number from the logged-in user
+    user_route_number = request.user.route_number
+
+    # Getting filter parameters from the request
+    date = request.GET.get('date')
+    status = request.GET.get('status')
+    route = request.GET.get('route', user_route_number)  # Default to user's route number if not provided
+    page_number = request.GET.get('page', 1)  # Getting the page number, default is 1
+
+    # Building the query based on the filters
+    query = {"route": route}  # Start with the user's route number
+    if date:
+        start_of_day = datetime.fromisoformat(date)
+        end_of_day = start_of_day + timedelta(days=1)
+        query['pick_up_date'] = {"$gte": start_of_day, "$lt": end_of_day}
+    if status:
+        query['status'] = status
+
+    # Sort orders by date descending to get the newest orders first
+    orders = list(collection.find(query).sort('$natural', -1))
+
+    for order in orders:
+        order['order_id'] = str(order['_id'])
+
+    # Apply pagination
+    paginator = Paginator(orders, 15)  # Show 15 orders per page
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'orders/order_view.html', {'page_obj': page_obj})
+
+
+@login_required
+def rsr_order_detail_view(request, order_id):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db['orders']
+    items_collection = db['mapped_items']
+
+    order = collection.find_one({'_id': ObjectId(order_id)})
+    if not order:
+        raise Http404("Order not found")
+
+    # Extract item numbers and fetch related data
+    order_item_numbers = [item['ItemNumber'] for item in order.get('items', [])]
+    available_items = list(items_collection.find({'ItemNumber': {'$nin': order_item_numbers}}))
+
+    return render(request, 'orders/rsr_order_detail.html', {
+        'order': order,
+        'available_items': available_items,
+    })
+
+
+@login_required
+@require_POST
+def confirm_order_items(request, order_id):  # Note: You can remove 'order_id' from the arguments if it's unused.
+    client = MongoConnection.get_client() # Ensure this is the correct method to get your MongoDB client
+    db = client['mydatabase']
+    collection = db['orders']
+
+
+    if not order_id:
+        return HttpResponseForbidden("Missing order ID.")
+
+    order = collection.find_one({'_id': ObjectId(order_id)})
+    if order is None:
+        return HttpResponseForbidden("Order not found.")
+
+    user_route_number = request.user.route_number
+    if str(user_route_number) != str(order.get('route')):
+        return HttpResponseForbidden("You do not have permission to confirm this order.")
+
+    result = collection.update_one(
+        {'_id': ObjectId(order_id)},
+        {'$set': {'status': 'Confirmed'}}
+    )
+
+
+    return redirect('ops:rsr_orders_view')

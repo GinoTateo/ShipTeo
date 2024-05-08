@@ -47,4 +47,10 @@ urlpatterns = [
     path('api/trigger-process-inventory/', views.trigger_process_inventory, name='trigger_process_inventory'),
     path('api/update-builder/<str:order_id>/', views.update_builder, name='update_builder'),
     path('api/delete-item/<str:item_id>/', views.update_builder, name='delete_item'),
+
+    # RSR Orders
+    path('warehouse/order/rsr/view/', views.rsr_orders_view, name='rsr_orders_view'),
+    path('warehouse/order/rsr/view/<str:order_id>/', views.rsr_order_detail_view, name='rsr_detail_order_view'),
+    path('warehouse/order/rsr/view/<str:order_id>/confirm/', views.confirm_order_items, name='confirm_order'),
+
 ]
