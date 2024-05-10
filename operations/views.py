@@ -2,6 +2,8 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
+
+from dotenv import load_dotenv
 from reportlab.pdfgen import canvas
 import pandas as pd
 import plotly.express as px
@@ -19,15 +21,18 @@ from django.views.decorators.http import require_http_methods, require_POST
 from pymongo import MongoClient
 from reportlab.lib.pagesizes import letter
 
+from account.decorators import user_is_warehouse_manager, user_is_warehouse_worker, user_is_rsr
+from operations.Approval_Backend import approval_main
 from operations.Inventory_Backend import inventory_main
 from operations.Order_Backend import order_main
 from django.core.paginator import Paginator
 
 # Constants
-MONGO_URI = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
+# MONGO_URI = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
 
+load_dotenv()  # This method will load variables from a .env file
 
-# MONGO_URI = os.environ.setdefault('DB_URI', 'DB_URI')
+MONGO_URI = os.environ.setdefault('DB_URI', 'DB_URI')
 
 class MongoConnection:
     _client = None
@@ -48,6 +53,7 @@ class MongoConnection:
 
 
 @login_required
+@user_is_warehouse_worker
 def warehouse_dashboard(request):
     client = MongoConnection.get_client()
     db = client['mydatabase']
@@ -63,21 +69,6 @@ def warehouse_dashboard(request):
     })
 
 
-# @login_required
-# def orders_view(request):
-#     filters = {
-#         'date': request.GET.get('date'),
-#         'status': request.GET.get('status'),
-#         'route': request.GET.get('route')
-#     }
-#
-#     client = MongoConnection.get_client()
-#     db = client['mydatabase']
-#     query = build_order_query(filters)
-#     orders = list(db['orders'].find(query))
-#
-#     return render(request, 'orders/order_view.html', {'orders': orders})
-#
 
 def build_order_query(filters):
     query = {}
@@ -93,6 +84,7 @@ def build_order_query(filters):
 
 
 @login_required
+@user_is_warehouse_worker
 def edit_order(request, order_id):
     if request.method != 'POST':
         return HttpResponse("Invalid request method", status=405)
@@ -110,8 +102,8 @@ def edit_order(request, order_id):
     return redirect('ops:edit_order', order_id=order_id)
 
 
-# Further functions to be optimized similarly
 
+@user_is_warehouse_worker
 def complete_order(request, order_id):
     try:
         uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
@@ -170,6 +162,7 @@ def calculate_duration(start_time, end_time):
     return (end_time - start_time).total_seconds()
 
 
+@user_is_warehouse_worker
 def prepare_order(request, order_id):
     if request.method != 'POST':
         return HttpResponse("Invalid request method", status=405)
@@ -193,6 +186,7 @@ def prepare_order(request, order_id):
 
 # Here
 @login_required
+@user_is_warehouse_worker
 def orders_view(request):
     uri = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
     client = MongoClient(uri)
@@ -254,6 +248,7 @@ def orders_view(request):
 
 
 @login_required
+@user_is_warehouse_worker
 def order_detail_view(request, order_id):
     edit_mode = 'edit' in request.GET and request.GET['edit'] == 'true'
 
@@ -320,6 +315,7 @@ def reorder_items(items, items_ordering):
 
 
 @login_required
+@user_is_warehouse_worker
 def generate_order_pdf(request, order_id):
     client = MongoConnection.get_client()
     db = client['mydatabase']
@@ -679,6 +675,7 @@ def list_items_view(request):
     return render(request, 'warehouse/list_items.html', {'items_by_type': items_by_type})
 
 
+@user_is_warehouse_worker
 @require_http_methods(["GET", "POST"])
 def review_order_view(request):
     if request.method == 'POST':
@@ -905,6 +902,7 @@ def comparison_across_weeks_view(request):
     return render(request, 'inventory/inventory_plot.html', {'plot_div': plot_div})
 
 
+@user_is_warehouse_worker
 def update_order(request, order_id):
     if request.method == 'POST':
         client = MongoConnection.get_client()
@@ -1030,6 +1028,7 @@ def trigger_process_inventory(request):
     return JsonResponse(response_data, safe=False)
 
 
+@user_is_warehouse_worker
 def update_builder(request, order_id):
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=405)
@@ -1124,7 +1123,8 @@ def create_order(request):
             'total_cases': sum(item['Quantity'] for item in order_items),
             'items': order_items,
             'status': 'Pending',
-            'transfer_id': '0000'
+            'transfer_id': '0000',
+            'Type': "ShipTeo"
         }
 
         # Save the order in MongoDB
@@ -1133,6 +1133,7 @@ def create_order(request):
 
 
 @login_required
+@user_is_warehouse_manager
 def delete_order(request, order_id):
     client = MongoConnection.get_client()
     db = client['mydatabase']
@@ -1153,10 +1154,11 @@ def delete_order(request, order_id):
 
 
 @login_required
+@user_is_rsr
 def rsr_orders_view(request):
     client = MongoConnection.get_client()
     db = client['mydatabase']
-    collection = db['orders']
+    collection = db['approvals']
 
     # Retrieve the route number from the logged-in user
     user_route_number = request.user.route_number
@@ -1186,14 +1188,15 @@ def rsr_orders_view(request):
     paginator = Paginator(orders, 15)  # Show 15 orders per page
     page_obj = paginator.get_page(page_number)
 
-    return render(request, 'orders/order_view.html', {'page_obj': page_obj})
+    return render(request, 'orders/rsr_order_view.html', {'page_obj': page_obj})
 
 
 @login_required
+@user_is_rsr
 def rsr_order_detail_view(request, order_id):
     client = MongoConnection.get_client()
     db = client['mydatabase']
-    collection = db['orders']
+    collection = db['approvals']
     items_collection = db['mapped_items']
 
     order = collection.find_one({'_id': ObjectId(order_id)})
@@ -1212,11 +1215,10 @@ def rsr_order_detail_view(request, order_id):
 
 @login_required
 @require_POST
-def confirm_order_items(request, order_id):  # Note: You can remove 'order_id' from the arguments if it's unused.
-    client = MongoConnection.get_client() # Ensure this is the correct method to get your MongoDB client
+def confirm_order_items(request, order_id):
+    client = MongoConnection.get_client()
     db = client['mydatabase']
-    collection = db['orders']
-
+    collection = db['approvals']  # Ensure you are using the correct collection
 
     if not order_id:
         return HttpResponseForbidden("Missing order ID.")
@@ -1229,10 +1231,29 @@ def confirm_order_items(request, order_id):  # Note: You can remove 'order_id' f
     if str(user_route_number) != str(order.get('route')):
         return HttpResponseForbidden("You do not have permission to confirm this order.")
 
+    # Process the form data
+    confirmed_items = request.POST.getlist('confirmed_items')
+
+    # Prepare the updated items list
+    updated_items = []
+    for item in order['items']:
+        item_number = item.get('ItemNumber')
+        if str(item_number) in confirmed_items:
+            item['Confirmed'] = True
+        else:
+            item['Confirmed'] = False
+        updated_items.append(item)
+
+    # Update the order with the confirmed items and set status to 'Confirmed'
     result = collection.update_one(
         {'_id': ObjectId(order_id)},
-        {'$set': {'status': 'Confirmed'}}
+        {'$set': {'items': updated_items, 'status': 'Confirmed'}}
     )
 
-
     return redirect('ops:rsr_orders_view')
+
+
+@csrf_exempt
+def trigger_process_approval(request):
+    response_data = approval_main()
+    return JsonResponse(response_data, safe=False)

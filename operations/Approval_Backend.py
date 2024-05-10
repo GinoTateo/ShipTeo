@@ -1,6 +1,5 @@
 import os
 import email as email_lib
-
 from dotenv import load_dotenv
 from pymongo import MongoClient
 import imaplib
@@ -151,7 +150,8 @@ def extract_table_from_html(html_body, extracted_data):
                     item_dict = {
                         'ItemNumber': item_number,
                         'ItemDescription': item_description,
-                        'Quantity': int(quantity)
+                        'Quantity': int(quantity),
+                        'Confirmed': bool(False)
                     }
                     extracted_data['items'].append(item_dict)
 
@@ -184,7 +184,7 @@ def reorder_items(items, items_ordering):
     return items
 
 
-def insert_order_into_mongodb(extracted_data, client, db_name='mydatabase', orders_collection='orders'):
+def insert_order_into_mongodb(extracted_data, client, db_name, orders_collection):
     """
     Inserts the order details into a MongoDB collection.
 
@@ -218,7 +218,7 @@ def insert_order_into_mongodb(extracted_data, client, db_name='mydatabase', orde
         'pick_up_time': extracted_data.get('pick_up_time'),
         'total_cases': total_cases,
         'items': extracted_data['items'],  # Assuming items is a list of dictionaries
-        'status': "Pending",
+        'status': "Ready for pick-up",
         'Type': "Power App"
     }
 
@@ -294,7 +294,7 @@ def fetch_unread_emails(email_address, password):
     return emails
 
 
-def check_and_parse_new_emails(email_address, email_password, client, db_name='mydatabase', orders_collection='orders'):
+def check_and_parse_new_emails(email_address, email_password, client, db_name, orders_collection):
     """
     Fetches unread emails, parses them, and inserts order details into MongoDB.
     """
@@ -305,7 +305,7 @@ def check_and_parse_new_emails(email_address, email_password, client, db_name='m
         subject = str(email_lib.header.make_header(email_lib.header.decode_header(email_message['Subject'])))
 
         # Updated condition to check the subject line
-        if 'Route Order for' in subject:
+        if 'approved' in subject:
             parsed_data = parse_email_content(raw_email)
             if parsed_data is not None:
                 insert_order_into_mongodb(parsed_data, client, db_name, orders_collection)
@@ -329,7 +329,7 @@ def parse_and_reorder_email(email_content, client):
 # client = MongoClient('mongodb://localhost:27017/')  # or your MongoDB connection details
 # check_and_parse_new_emails('your_email@gmail.com', 'your_password', client)
 
-def order_main():
+def approval_main():
     load_dotenv()  # This method will load variables from a .env file
 
     email = os.getenv('EMAIL_ADDRESS')
@@ -338,5 +338,4 @@ def order_main():
 
     client = MongoClient(uri)
 
-    check_and_parse_new_emails(email, password, client, 'mydatabase', 'orders')
-
+    check_and_parse_new_emails(email, password, client, 'mydatabase', 'approvals')

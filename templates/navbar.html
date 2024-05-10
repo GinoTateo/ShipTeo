@@ -23,6 +23,7 @@
         <div class="collapse navbar-collapse" id="navbarNavDropdown">
             <ul class="navbar-nav">
                 <!-- Warehouse Dropdown -->
+            {% if user.is_warehouse_worker %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         Warehouse
@@ -35,6 +36,7 @@
                         <li><a class="dropdown-item" href="/ops/warehouse/order/create/">Create</a></li>
                     </ul>
                 </li>
+            {% endif %}
                 <!-- Additional Nav Links Here -->
                 {% if user.is_merch %}
                 <li class="nav-item"><a class="nav-link" href="/merch/dashboard">Merch</a></li>
