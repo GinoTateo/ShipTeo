@@ -17,8 +17,7 @@
                 <h2 class="card-title">{{ order.route }}</h2>
                 <h4 class="card-subtitle mb-2 text-muted">{{ order.pick_up_date|date:"F j, Y" }}</h4>
                 <p><strong>Total Items:</strong> {{ order.total_cases }}</p>
-                <p><strong>Builder:</strong> {{ order.builder_name }}</p>
-                <p><strong>Status:</strong> <span class="{% if order.status == 'Confirmed' %}badge badge-success{% elif order.status == 'Ready for pick up' %}badge badge-info{% else %}badge badge-secondary{% endif %}">{{ order.status }}</span></p>
+                <p><strong>Status:</strong> <span class="{% if order.status == 'Confirmed' %}badge badge-success{% elif order.status == 'Ready for pick-up' %}badge badge-info{% else %}badge badge-secondary{% endif %}">{{ order.status }}</span></p>
             </div>
         </div>
 

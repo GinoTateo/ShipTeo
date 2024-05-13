@@ -6,9 +6,9 @@ from django.contrib.auth.models import User
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.http import is_safe_url
-
 from account.forms import AccountAuthenticationForm, AccountUpdateForm, RegistrationForm
 from account.models import Account
+
 
 def home(request):
     return render(request, 'home.html')
@@ -17,7 +17,6 @@ def home(request):
 def login_view(request, *args, **kwargs):
     # Get 'next' parameter from the request for both GET and POST
     next_url = request.POST.get('next') or request.GET.get('next')
-
 
     if request.method == "POST":
         form = AuthenticationForm(request, data=request.POST)
@@ -50,9 +49,11 @@ def get_redirect_if_exists(request):
             redirect = str(request.GET.get("next"))
     return redirect
 
+
 def get_lower(username):
     lower_case = username.lower
     return lower_case
+
 
 def logout_view(request):
     logout(request)
@@ -112,6 +113,7 @@ def edit_account_view(request, *args, **kwargs):
         context['form'] = form
     return render(request, "account/edit_account.html", context)
 
+
 def register_view(request, *args, **kwargs):
     user = request.user
     if user.is_authenticated:
@@ -135,3 +137,19 @@ def register_view(request, *args, **kwargs):
 
 def service(request):
     return render(request, 'service.html')
+
+
+def custom_404(request, exception):
+    return render(request, 'error_templates/404.html', status=404)
+
+
+def custom_500(request):
+    return render(request, 'error_templates/500.html', status=500)
+
+
+def custom_403(request, exception):
+    return render(request, 'error_templates/403.html', status=403)
+
+
+def custom_400(request, exception):
+    return render(request, 'error_templates/400.html', status=400)

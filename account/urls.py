@@ -1,7 +1,6 @@
 from django.urls import path
-
+from django.conf.urls import handler404, handler500, handler403, handler400
 from account import views
-
 from django.contrib.auth import views as auth_views
 
 app_name = 'account'
@@ -16,7 +15,6 @@ urlpatterns = [
     path('register', views.register_view, name='register'),
     path('logout', views.logout_view, name='logout'),
     # path('register', views.register_view, name='register'),
-
 
     # Password reset links (ref: https://github.com/django/django/blob/master/django/contrib/auth/views.py)
     path('password_change/done/',
@@ -36,4 +34,12 @@ urlpatterns = [
     path('reset/done/',
          auth_views.PasswordResetCompleteView.as_view(template_name='password_reset/password_reset_complete.html'),
          name='password_reset_complete'),
+
+
+
 ]
+
+handler404 = 'account.views.custom_404'
+handler500 = 'account.views.custom_500'
+handler403 = 'account.views.custom_403'
+handler400 = 'account.views.custom_400'

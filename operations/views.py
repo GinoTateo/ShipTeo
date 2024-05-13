@@ -200,7 +200,7 @@ def orders_view(request):
     page_number = request.GET.get('page', 1)  # Getting the page number, default is 1
 
     routes = {
-        "RTC000003",
+        "RTC0003",
         "RTC00013",
         "RTC00018",
         "RTC00019",
@@ -210,7 +210,7 @@ def orders_view(request):
         "RTC000649",
         "RTC000700",
         "RTC000719",
-        "RTC000004",
+        "RTC0004",
         "RTC000127",
         "RTC000433",
         "RTC000647",
@@ -220,7 +220,7 @@ def orders_view(request):
         "RTC000765",
         "RTC000783",
         "RTC000764",
-        "RTC000002",
+        "RTC0002",
     }
 
     # Building the query based on the filters
@@ -1059,37 +1059,37 @@ def update_builder(request, order_id):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
+@login_required  # Ensure the user is logged in
 def create_order(request):
     client = MongoConnection.get_client()
     db = client['mydatabase']
     collection = db.items
 
+    routes = {
+        "RTC0003",
+        "RTC00013",
+        "RTC00018",
+        "RTC00019",
+        "RTC00089",
+        "RTC000377",
+        "RTC000379",
+        "RTC000649",
+        "RTC000700",
+        "RTC000719",
+        "RTC0004",
+        "RTC000127",
+        "RTC000433",
+        "RTC000647",
+        "RTC000720",
+        "RTC000730",
+        "RTC000731",
+        "RTC000765",
+        "RTC000783",
+        "RTC000764",
+        "RTC0002",
+    }
+
     if request.method == 'GET':
-
-        routes = {
-            "RTC000003",
-            "RTC000013",
-            "RTC000018",
-            "RTC00019",
-            "RTC000089",
-            "RTC000377",
-            "RTC000379",
-            "RTC000649",
-            "RTC000700",
-            "RTC000719",
-            "RTC000004",
-            "RTC000127",
-            "RTC000433",
-            "RTC000647",
-            "RTC000720",
-            "RTC000730",
-            "RTC000731",
-            "RTC000765",
-            "RTC000783",
-            "RTC000764",
-            "RTC000002",
-        }
-
         # Fetch items from MongoDB
         items_cursor = collection.find()
         items_by_type = {}
@@ -1099,19 +1099,28 @@ def create_order(request):
                 items_by_type[item_type] = []
             items_by_type[item_type].append(item)
 
+        # Determine the user's route number if logged in
+        user_route_number = request.user.route_number if request.user.is_authenticated else None
+
         # Passing items grouped by type to the template
-        return render(request, 'orders/create_order.html', {'items_by_type': items_by_type, 'routes': routes})
+        context = {
+            'items_by_type': items_by_type,
+            'routes': routes if not user_route_number else None,
+            'user_route_number': user_route_number,
+        }
+        return render(request, 'orders/create_order.html', context)
 
     elif request.method == 'POST':
-        route_number = request.POST.get('routeNumber')
+        # Use user route number if logged in, otherwise get from form
+        route_number = request.user.route_number if request.user.is_authenticated else request.POST.get('routeNumber')
+
         # Process item quantities and descriptions
         order_items = []
-
         for key, value in request.POST.items():
             if key.startswith('quantity_') and value.isdigit() and int(value) > 0:
                 ItemNumber = key.split('_')[1]
                 Quantity = int(value)
-                ItemDescription = request.POST.get('description_' + ItemNumber)
+                ItemDescription = request.POST.get(f'description_{ItemNumber}')
                 order_items.append({'ItemNumber': ItemNumber, 'ItemDescription': ItemDescription, 'Quantity': Quantity})
 
         # Build order details dictionary
@@ -1130,7 +1139,6 @@ def create_order(request):
         # Save the order in MongoDB
         db.orders.insert_one(order_details)
         return render(request, 'orders/order_confirmation.html', {'order': order_details})
-
 
 @login_required
 @user_is_warehouse_manager
