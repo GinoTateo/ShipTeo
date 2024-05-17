@@ -95,28 +95,53 @@ class Account(AbstractBaseUser):
         return True
 
     def is_rsr(self):
-        return self.title == 'RSR'
+        if self.title == 'RSR':
+            return True
+        else:
+            return False
 
     def is_merch(self):
-        return self.title == 'Merch'
+        if self.title == 'Merch':
+            return True
+        else:
+            return False
 
     def is_regional_manager(self):
-        return self.title == 'RM'
+        if self.title == 'RM':
+            return True
+        else:
+            return False
 
     def is_division_manager(self):
-        return self.title == 'DM'
+        if self.title == 'DM':
+            return True
+        else:
+            return False
 
     def is_warehouse_manager(self):
-        return self.title == 'WHM'
+        if self.title == 'WHM':
+            return True
+        else:
+            return False
 
     def is_warehouse_supervisor(self):
-        return self.title == 'WHS'
+        if self.title == 'WHS':
+            return True
+        else:
+            return False
 
     def is_warehouse_associate(self):
-        return self.title == 'WHA'
+        if self.title == 'WHA':
+            return True
+        else:
+            return False
 
     def is_warehouse_worker(self):
-        return self.title in ['WHM', 'WHS', 'WHA']
+        if self.title in ['WHM', 'WHS', 'WHA']:
+            return True
+        else:
+            return False
+
 
     @receiver(post_save, sender=settings.AUTH_USER_MODEL)
     def create_auth_token(sender, instance=None, created=False, **kwargs):

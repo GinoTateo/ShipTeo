@@ -2,11 +2,10 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth.models import User
 from django.http import HttpResponse
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.utils.http import is_safe_url
-from account.forms import AccountAuthenticationForm, AccountUpdateForm, RegistrationForm
+from account.forms import AccountUpdateForm, RegistrationForm
 from account.models import Account
 
 

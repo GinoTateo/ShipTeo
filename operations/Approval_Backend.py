@@ -218,7 +218,7 @@ def insert_order_into_mongodb(extracted_data, client, db_name, orders_collection
         'pick_up_time': extracted_data.get('pick_up_time'),
         'total_cases': total_cases,
         'items': extracted_data['items'],  # Assuming items is a list of dictionaries
-        'status': "Ready for pick-up",
+        'status': "Confirm Pending",
         'Type': "Power App"
     }
 

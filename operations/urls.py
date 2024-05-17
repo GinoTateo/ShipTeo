@@ -24,6 +24,10 @@ urlpatterns = [
     path('warehouse/order/', views.orders_view, name='order_view'),
     path('warehouse/order/<str:order_id>/', views.order_detail_view, name='detail_order_view'),
 
+    # Approval
+    path('warehouse/approval/', views.warehouse_approval_view, name='warehouse_approval_view'),
+    path('warehouse/approval/<str:order_id>/', views.warehouse_approval_detail_view, name='detail_warehouse_approval_view'),
+    path('warehouse/approval/<str:order_id>/confirm/', views.confirm_order_items, name='confirm_order'),
 
     path('warehouse/order/<str:order_id>/pdf/', views.generate_order_pdf, name='generate_order_pdf'),
     path('warehouse/order/<str:order_id>/complete/', views.complete_order, name='complete_order'),
@@ -53,5 +57,10 @@ urlpatterns = [
     path('warehouse/order/rsr/view/', views.rsr_orders_view, name='rsr_orders_view'),
     path('warehouse/order/rsr/view/<str:order_id>/', views.rsr_order_detail_view, name='rsr_detail_order_view'),
     path('warehouse/order/rsr/view/<str:order_id>/confirm/', views.confirm_order_items, name='confirm_order'),
+
+
+
+    # Warehouse Order picker
+    path('warehouse/order/picker/<str:order_id>/', views.order_picker, name='order_picker_view'),
 
 ]

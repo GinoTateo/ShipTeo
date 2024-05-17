@@ -59,9 +59,18 @@
               {% for item in items %}
                 <li class="mb-2">
                   <div class="row">
-                    <div class="col-md-8">
+                    <div class="col-md-6">
                       <strong>{{ item.ItemDescription }}</strong> <br>
                       <small>Item Number: {{ item.ItemNumber }}</small>
+                    </div>
+                    <div class="col-md-2">
+                      {% if suggested_order %}
+                        {% for suggested_item in suggested_order.items %}
+                          {% if suggested_item.ItemNumber == item.ItemNumber %}
+                            <span>Weekly AVG: <strong>{{ suggested_item.SuggestedQuantity }}</strong></span>
+                          {% endif %}
+                        {% endfor %}
+                      {% endif %}
                     </div>
                     <div class="col-md-4">
                       <label for="quantity_{{ item.ItemNumber }}">Quantity:</label>
@@ -70,6 +79,9 @@
                     </div>
                   </div>
                 </li>
+                {% if not loop.last %}
+                  <hr>
+                {% endif %}
               {% endfor %}
             </ul>
           </div>
@@ -84,3 +96,4 @@
 
 </body>
 </html>
+

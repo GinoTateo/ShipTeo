@@ -34,6 +34,43 @@ load_dotenv()  # This method will load variables from a .env file
 
 MONGO_URI = os.environ.setdefault('DB_URI', 'DB_URI')
 
+routes = {
+    "RTC0003",
+    "RTC00013",
+    "RTC00018",
+    "RTC00019",
+    "RTC00089",
+    "RTC000377",
+    "RTC000379",
+    "RTC000649",
+    "RTC000700",
+    "RTC000719",
+    "RTC0004",
+    "RTC000127",
+    "RTC000433",
+    "RTC000647",
+    "RTC000720",
+    "RTC000730",
+    "RTC000731",
+    "RTC000765",
+    "RTC000783",
+    "RTC000764",
+    "RTC0002",
+}
+
+ship_to_routes = {
+    "RTC0003",
+    "RTC00013",
+    "RTC00018",
+    "RTC00019",
+    "RTC00089",
+    "RTC000377",
+    "RTC000379",
+    "RTC000649",
+    "RTC000700",
+    "RTC000719",
+    }
+
 class MongoConnection:
     _client = None
 
@@ -69,7 +106,6 @@ def warehouse_dashboard(request):
     })
 
 
-
 def build_order_query(filters):
     query = {}
     if filters['date']:
@@ -100,7 +136,6 @@ def edit_order(request, order_id):
         return HttpResponse("Order not found", status=404)
 
     return redirect('ops:edit_order', order_id=order_id)
-
 
 
 @user_is_warehouse_worker
@@ -199,29 +234,6 @@ def orders_view(request):
     route = request.GET.get('route')
     page_number = request.GET.get('page', 1)  # Getting the page number, default is 1
 
-    routes = {
-        "RTC0003",
-        "RTC00013",
-        "RTC00018",
-        "RTC00019",
-        "RTC00089",
-        "RTC000377",
-        "RTC000379",
-        "RTC000649",
-        "RTC000700",
-        "RTC000719",
-        "RTC0004",
-        "RTC000127",
-        "RTC000433",
-        "RTC000647",
-        "RTC000720",
-        "RTC000730",
-        "RTC000731",
-        "RTC000765",
-        "RTC000783",
-        "RTC000764",
-        "RTC0002",
-    }
 
     # Building the query based on the filters
     query = {}
@@ -332,15 +344,20 @@ def generate_order_pdf(request, order_id):
     item_to_type = {}
 
     # Fetch location and type mappings from the 'mapped_items' collection in one go
-    for doc in mapped_items_collection.find({}):
-        item_number = doc["ItemNumber"]
-        item_to_location[item_number] = doc.get("Location", "N/A")
-        item_to_type[item_number] = doc.get("Type", "N/A")  # Assuming 'Type' is the correct field name
+    try:
+        for doc in mapped_items_collection.find({}):
+            try:
+                # Ensure ItemNumber is an integer
+                item_number = int(doc['ItemNumber'])
+            except (ValueError, KeyError, TypeError):
+                print(f"Error converting or finding ItemNumber in document: {doc}")
+                continue
 
-    ship_to_routes = [
-        "RTC000003", "RTC00013", "RTC000018", "RTC000019", "RTC000089",
-        "RTC000377", "RTC000379", "RTC000649", "RTC000700", "RTC000719"
-    ]
+            item_to_location[item_number] = doc.get("Location", "N/A")
+            item_to_type[item_number] = doc.get("Type", "N/A")  # Assuming 'Type' is the correct field name
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
 
     order = collection.find_one({'_id': ObjectId(order_id)})
 
@@ -359,7 +376,6 @@ def generate_order_pdf(request, order_id):
     # Initialize totals
     total_quantity = 0
     adjusted_total_quantity = 0
-    type_counts = {}
 
     for item in ordered_items:
         item_number = item.get('ItemNumber', '')
@@ -369,16 +385,6 @@ def generate_order_pdf(request, order_id):
             if item_number not in oos_items:
                 adjusted_total_quantity += quantity  # Add to adjusted total if not OOS
 
-            # Fetch item type using the item number, default to "Other" if not found
-            item_type = item_to_type.get(item_number, "Other")
-            # Extract the type key assuming it starts with letters followed by numbers (e.g., 'PG10')
-
-            # Calculate type-specific statistics
-            if item_type != "Other":
-                if item_type in type_counts:
-                    type_counts[item_type] += quantity
-                else:
-                    type_counts[item_type] = quantity
         except ValueError:
             # Log error or handle the case where the quantity is not an integer
             print(f"Warning: Invalid quantity '{item.get('Quantity')}' for item number {item_number}")
@@ -416,10 +422,10 @@ def generate_order_pdf(request, order_id):
     # Draw column headers, including a new column for 'Location'
     p.drawString(30, y_position, "Item Number")
     p.drawString(150, y_position, "Description")
-    p.drawString(340, y_position, "Quantity")
+    p.drawString(340, y_position, "Bay")
     # Adjust existing columns to make room for the new 'Location' column
-    p.drawString(420, y_position, "Type")  # New location column
-    p.drawString(470, y_position, "Location")  # New location column
+    p.drawString(400, y_position, "Quantity")  # New location column
+    p.drawString(470, y_position, "Type")  # New location column
     p.drawString(530, y_position, "Stock Status")
     p.drawString(630, y_position, "Check")  # Checkboxes moved to the far right
 
@@ -440,30 +446,31 @@ def generate_order_pdf(request, order_id):
         p.line(30, y_position - 2, 580, y_position - 2)  # Adjust line length as needed
 
         item_number = item.get('ItemNumber', 'Unknown')
+        p.rect(135, y_position - 2, 12, 12, stroke=1, fill=0)  # Checkbox
         description = item.get('ItemDescription', 'N/A')
         stock_status = "IS" if item_number not in oos_items else "OOS"
 
         # Drawing item details (keep this part unchanged)
         p.drawString(30, y_position, str(item_number))
         p.drawString(150, y_position, description)
-        p.drawString(350, y_position, str(quantity))
+        p.drawString(415, y_position, str(quantity))
 
         # If the item is out of stock, cross out the quantity
         if stock_status == "OOS":
             # Calculate width of the quantity text for precise line drawing
             quantity_text_width = p.stringWidth(str(quantity), "Helvetica", 12)
             # Draw a line through the quantity text
-            p.line(350, y_position + 4, 350 + quantity_text_width, y_position + 4)
+            p.line(410, y_position + 4, 420 + quantity_text_width, y_position + 4)
 
-        item_type = item_to_type.get(item_number, "N/A")  # Fetch the type
-        p.drawString(420, y_position, item_type)
+        item_type = item_to_type.get(int(item_number), "N/A")  # Fetch the type
+        p.drawString(470, y_position, item_type)
 
         # Draw the location next to each item
-        item_location = item_to_location.get(item_number, "N/A")
-        p.drawString(485, y_position, item_location)
+        item_location = item_to_location.get(int(item_number), "N/A")
+        p.drawString(340, y_position, item_location)
 
         # Draw the placeholder box for adjustment quantity, stock status, and checkbox
-        p.rect(370, y_position - 2, 30, 15)  # Placeholder box for adjustment quantity
+        p.rect(380, y_position - 2, 30, 15)  # Placeholder box for adjustment quantity
         p.drawString(530, y_position, stock_status)  # Include stock status
         p.rect(630, y_position - 2, 12, 12, stroke=1, fill=0)  # Checkbox
 
@@ -475,55 +482,7 @@ def generate_order_pdf(request, order_id):
             p.showPage()
             y_position = height - 50
 
-    # Define the start position for the statistics section on the page
-    y_position = max(50, y_position - 20)  # Ensure there's space or create a new page if needed
-    x_position_start = 30  # Start at the left margin
-    x_increment = 100  # Increment x position for each statistic, adjust as necessary based on your page width
 
-    # Calculate the starting y position for the statistics, ensuring there's space for headers and counts
-    y_position = max(50, y_position - 40)  # Move up from the last item or set at a minimum if near page end
-    x_position_start = 30  # Start at the left margin of the page
-    total_types = len(type_counts)
-
-    # Calculate even spacing across the page
-    space_between = (width - 20) / total_types  # Subtract margins and divide by number of types
-
-    # Set initial x position
-    x_position = x_position_start
-
-    if route_number in ship_to_routes:
-        # Draw bold column headers for each item type
-        p.setFont("Helvetica-Bold", 12)  # Set font to bold for headers
-        for type_key in type_counts.keys():
-            p.drawString(x_position, y_position, type_key)
-            x_position += space_between  # Move to next column position
-
-        # Move down to place counts under headers
-        y_position -= 20
-        x_position = x_position_start  # Reset to start position
-
-        # Draw counts under each header
-        p.setFont("Helvetica", 12)  # Set font to normal for counts
-        for type_key, count in type_counts.items():
-            # Determine the divisor for the type
-            divisor = 1  # Default divisor
-            if type_key in ['PG10', 'PW10', 'SG12', 'SW12', 'SW18', ]:
-                divisor = 25
-            elif type_key in ['PG18', 'K10', 'K22', 'IW', 'PW18']:
-                divisor = 20
-            elif type_key == 'PC':
-                divisor = 19
-            elif type_key == 'MLT':
-                divisor = 23
-            elif type_key == 'K32':
-                divisor = 15
-            elif type_key == 'K48':
-                divisor = 10
-
-            # Calculate and format the adjusted count
-            formatted_count = round(count / divisor, 1)
-            p.drawString(x_position, y_position, str(formatted_count) + " ")
-            x_position += space_between  # Move to next column position
 
     p.setTitle(route_number)
     p.showPage()
@@ -1059,35 +1018,24 @@ def update_builder(request, order_id):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
+def fetch_suggested_order(route_number):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db.suggested_order
+
+    suggested_order = collection.find_one({
+        'route': route_number,
+    })
+
+
+    return suggested_order
+
+
 @login_required  # Ensure the user is logged in
 def create_order(request):
     client = MongoConnection.get_client()
     db = client['mydatabase']
     collection = db.items
-
-    routes = {
-        "RTC0003",
-        "RTC00013",
-        "RTC00018",
-        "RTC00019",
-        "RTC00089",
-        "RTC000377",
-        "RTC000379",
-        "RTC000649",
-        "RTC000700",
-        "RTC000719",
-        "RTC0004",
-        "RTC000127",
-        "RTC000433",
-        "RTC000647",
-        "RTC000720",
-        "RTC000730",
-        "RTC000731",
-        "RTC000765",
-        "RTC000783",
-        "RTC000764",
-        "RTC0002",
-    }
 
     if request.method == 'GET':
         # Fetch items from MongoDB
@@ -1102,11 +1050,15 @@ def create_order(request):
         # Determine the user's route number if logged in
         user_route_number = request.user.route_number if request.user.is_authenticated else None
 
+        # Fetch suggested order for the user's route number
+        suggested_order = fetch_suggested_order(user_route_number) if user_route_number else None
+
         # Passing items grouped by type to the template
         context = {
             'items_by_type': items_by_type,
             'routes': routes if not user_route_number else None,
             'user_route_number': user_route_number,
+            'suggested_order': suggested_order,
         }
         return render(request, 'orders/create_order.html', context)
 
@@ -1139,6 +1091,7 @@ def create_order(request):
         # Save the order in MongoDB
         db.orders.insert_one(order_details)
         return render(request, 'orders/order_confirmation.html', {'order': order_details})
+
 
 @login_required
 @user_is_warehouse_manager
@@ -1226,42 +1179,141 @@ def rsr_order_detail_view(request, order_id):
 def confirm_order_items(request, order_id):
     client = MongoConnection.get_client()
     db = client['mydatabase']
-    collection = db['approvals']  # Ensure you are using the correct collection
+    collection = db['approvals']
 
     if not order_id:
-        return HttpResponseForbidden("Missing order ID.")
+        return render(request, "error_templates/forbidden.html", {'message': "Missing order ID."}, status=403)
 
     order = collection.find_one({'_id': ObjectId(order_id)})
     if order is None:
-        return HttpResponseForbidden("Order not found.")
+        return render(request, "error_templates/forbidden.html", {'message': "Order not found."}, status=403)
 
-    user_route_number = request.user.route_number
-    if str(user_route_number) != str(order.get('route')):
-        return HttpResponseForbidden("You do not have permission to confirm this order.")
+    if request.user.is_rsr():
+        user_route_number = request.user.route_number
+        if str(user_route_number) != str(order.get('route')):
+            return render(request, "error_templates/forbidden.html", {'message': "You do not have permission to confirm this order."}, status=403)
+    elif not request.user.is_warehouse_worker():
+        return render(request, "error_templates/forbidden.html", {'message': "You do not have permission to confirm this order."}, status=403)
 
-    # Process the form data
+    # Process the form data to get confirmed items
     confirmed_items = request.POST.getlist('confirmed_items')
 
-    # Prepare the updated items list
-    updated_items = []
-    for item in order['items']:
-        item_number = item.get('ItemNumber')
-        if str(item_number) in confirmed_items:
-            item['Confirmed'] = True
-        else:
-            item['Confirmed'] = False
-        updated_items.append(item)
 
-    # Update the order with the confirmed items and set status to 'Confirmed'
+    if request.user.is_rsr():
+        status = "RSR Confirmed"
+    elif request.user.is_warehouse_worker():
+        if order.get("route") in ship_to_routes:
+            status = "Shipping"
+        else:
+            status = "Ready for pick-up"
+
+    # Update the order with the confirmed items and set status
     result = collection.update_one(
         {'_id': ObjectId(order_id)},
-        {'$set': {'items': updated_items, 'status': 'Confirmed'}}
+        {'$set': {'items': confirmed_items, 'status': status}}
     )
 
-    return redirect('ops:rsr_orders_view')
+    # Redirect based on the user's role
+    if request.user.is_rsr():
+        return redirect('ops:rsr_orders_view')
+    elif request.user.is_warehouse_worker():
+        return redirect('ops:warehouse_approval_view')
+    else:
+        return render(request, "error_templates/forbidden.html",
+                      {'message': "You do not have permission to confirm this order."}, status=403)
 
 
 @csrf_exempt
 def trigger_process_approval(request):
     response_data = approval_main()
     return JsonResponse(response_data, safe=False)
+
+
+@login_required
+@user_is_warehouse_worker
+def order_picker(request, order_id):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    orders_collection = db['orders']
+    items_collection = db['items']
+
+    # Fetch the order by its ID
+    order = orders_collection.find_one({'_id': ObjectId(order_id)})
+    if not order:
+        raise Http404("Order not found")
+
+    # Extract item numbers as integers, checking if ItemNumber is in the item dict
+    item_numbers = [int(item['ItemNumber']) for item in order.get('items', []) if 'ItemNumber' in item]
+    print("Item numbers extracted for query:", item_numbers)
+
+    # Fetch and process items
+    items_data = items_collection.find({'ItemNumber': {'$in': item_numbers}})
+    items_list = list(items_data)  # Make a list once
+    item_details = {item['ItemNumber']: item for item in items_list}
+    print("Item details dictionary:", item_details)
+
+    order_items_data = []
+    for item in order.get('items', []):
+        item_num = int(item['ItemNumber'])  # Convert to int, ensuring consistent key usage
+        item_info = item_details.get(item_num, {})  # Access using integer keys
+        location = item_info.get('ItemLocation', 'Location not found')
+
+        print(f"Processing item number: {item_num} - Found location: {location}")  # Debug output
+
+        order_item = {
+            'ItemNumber': item_num,
+            'Description': item.get('ItemDescription', 'No description'),
+            'Quantity': item.get('Quantity', 0),
+            'Location': location
+        }
+        order_items_data.append(order_item)
+
+
+    order_items_json = json.dumps(order_items_data)
+
+    return render(request, 'orders/picker/base_picker.html', {
+        'order_items': order_items_json
+    })
+
+
+@login_required
+@user_is_warehouse_worker
+def warehouse_approval_view(request):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db['approvals']
+
+    # Sort orders by date descending to get the newest orders first
+    approvals = list(collection.find().sort('$natural', -1))
+    page_number = request.GET.get('page', 1)  # Getting the page number, default is 1
+
+
+    for order in approvals:
+        order['order_id'] = str(order['_id'])
+
+    # Apply pagination
+    paginator = Paginator(approvals, 15)  # Show 15 orders per page
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'orders/rsr_order_view.html', {'page_obj': page_obj})
+
+@login_required
+@user_is_warehouse_worker
+def warehouse_approval_detail_view(request, order_id):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db['approvals']
+    items_collection = db['mapped_items']
+
+    order = collection.find_one({'_id': ObjectId(order_id)})
+    if not order:
+        raise Http404("Order not found")
+
+    # Extract item numbers and fetch related data
+    order_item_numbers = [item['ItemNumber'] for item in order.get('items', [])]
+    available_items = list(items_collection.find({'ItemNumber': {'$nin': order_item_numbers}}))
+
+    return render(request, 'orders/rsr_order_detail.html', {
+        'order': order,
+        'available_items': available_items,
+    })
