@@ -382,7 +382,7 @@ def generate_order_pdf(request, order_id):
         try:
             quantity = int(item.get('Quantity', 0))
             total_quantity += quantity  # Add to total quantity
-            if item_number not in oos_items:
+            if int(item_number) not in oos_items:
                 adjusted_total_quantity += quantity  # Add to adjusted total if not OOS
 
         except ValueError:
@@ -401,32 +401,23 @@ def generate_order_pdf(request, order_id):
     p.drawString(30, height - 50, f"Route Number: {route_number} ({route_type}) ")
     p.setFont("Helvetica", 12)
 
-    builder_name = order.get("builder_name")
-    p.drawString(30, height - 70, f"Transfer ID: {tid} ")
-    p.drawString(30, height - 90, f"Builder: {builder_name} ")
-
     # Move total quantity and related information to the top right
     p.drawString(width - 300, height - 50, f"Total Quantity Ordered: {total_quantity}")
     p.drawString(width - 300, height - 70, f"Total After OOS Adjustments: {adjusted_total_quantity}")
-    p.drawString(width - 300, height - 90, "Build Adjustments:")
+    p.drawString(width - 300, height - 90, "Physical Count:")
     p.rect(width - 180, height - 92, 50, 15)  # Adjustment input box
-    p.drawString(width - 300, height - 110, "Build Count:")
-    p.rect(width - 180, height - 112, 50, 15)  # Build count box
-    p.drawString(width - 300, height - 130, "Scan Count:")
-    p.rect(width - 180, height - 132, 50, 15)  # Scan count box
 
     # Starting position adjustment for item list
-    y_position = height - 170
+    y_position = height - 120
 
     p.setFont("Helvetica-Bold", 12)
     # Draw column headers, including a new column for 'Location'
     p.drawString(30, y_position, "Item Number")
     p.drawString(150, y_position, "Description")
-    p.drawString(340, y_position, "Bay")
+    p.drawString(340, y_position, "Location")
     # Adjust existing columns to make room for the new 'Location' column
-    p.drawString(400, y_position, "Quantity")  # New location column
-    p.drawString(470, y_position, "Type")  # New location column
-    p.drawString(530, y_position, "Stock Status")
+    p.drawString(475, y_position, "Quantity")  # New location column
+    p.drawString(530, y_position, "Status")
     p.drawString(630, y_position, "Check")  # Checkboxes moved to the far right
 
     # Revert to normal font for item details
@@ -446,31 +437,29 @@ def generate_order_pdf(request, order_id):
         p.line(30, y_position - 2, 580, y_position - 2)  # Adjust line length as needed
 
         item_number = item.get('ItemNumber', 'Unknown')
-        p.rect(135, y_position - 2, 12, 12, stroke=1, fill=0)  # Checkbox
+
         description = item.get('ItemDescription', 'N/A')
-        stock_status = "IS" if item_number not in oos_items else "OOS"
+        stock_status = "IS" if int(item_number) not in oos_items else "OOS"
 
         # Drawing item details (keep this part unchanged)
         p.drawString(30, y_position, str(item_number))
         p.drawString(150, y_position, description)
-        p.drawString(415, y_position, str(quantity))
+        p.drawString(475, y_position, str(quantity))
 
         # If the item is out of stock, cross out the quantity
         if stock_status == "OOS":
             # Calculate width of the quantity text for precise line drawing
             quantity_text_width = p.stringWidth(str(quantity), "Helvetica", 12)
             # Draw a line through the quantity text
-            p.line(410, y_position + 4, 420 + quantity_text_width, y_position + 4)
-
-        item_type = item_to_type.get(int(item_number), "N/A")  # Fetch the type
-        p.drawString(470, y_position, item_type)
+            p.line(475, y_position + 4, 480 + quantity_text_width, y_position + 4)
 
         # Draw the location next to each item
         item_location = item_to_location.get(int(item_number), "N/A")
-        p.drawString(340, y_position, item_location)
+        p.drawString(360, y_position, item_location)
+        p.rect(340, y_position - 2, 12, 12, stroke=1, fill=0)  # Checkbox
 
         # Draw the placeholder box for adjustment quantity, stock status, and checkbox
-        p.rect(380, y_position - 2, 30, 15)  # Placeholder box for adjustment quantity
+        p.rect(495, y_position - 2, 25, 15)  # Placeholder box for adjustment quantity
         p.drawString(530, y_position, stock_status)  # Include stock status
         p.rect(630, y_position - 2, 12, 12, stroke=1, fill=0)  # Checkbox
 
@@ -481,7 +470,6 @@ def generate_order_pdf(request, order_id):
         if y_position < 50:
             p.showPage()
             y_position = height - 50
-
 
 
     p.setTitle(route_number)
@@ -1027,7 +1015,6 @@ def fetch_suggested_order(route_number):
         'route': route_number,
     })
 
-
     return suggested_order
 
 
@@ -1166,11 +1153,12 @@ def rsr_order_detail_view(request, order_id):
 
     # Extract item numbers and fetch related data
     order_item_numbers = [item['ItemNumber'] for item in order.get('items', [])]
-    available_items = list(items_collection.find({'ItemNumber': {'$nin': order_item_numbers}}))
+    items = list(items_collection.find({'ItemNumber': {'$nin': order_item_numbers}}))
+    print(items)
 
     return render(request, 'orders/rsr_order_detail.html', {
         'order': order,
-        'available_items': available_items,
+        'items': items,
     })
 
 
@@ -1191,27 +1179,58 @@ def confirm_order_items(request, order_id):
     if request.user.is_rsr():
         user_route_number = request.user.route_number
         if str(user_route_number) != str(order.get('route')):
-            return render(request, "error_templates/forbidden.html", {'message': "You do not have permission to confirm this order."}, status=403)
+            return render(request, "error_templates/forbidden.html",
+                          {'message': "You do not have permission to confirm this order."}, status=403)
     elif not request.user.is_warehouse_worker():
-        return render(request, "error_templates/forbidden.html", {'message': "You do not have permission to confirm this order."}, status=403)
+        return render(request, "error_templates/forbidden.html",
+                      {'message': "You do not have permission to confirm this order."}, status=403)
 
     # Process the form data to get confirmed items
     confirmed_items = request.POST.getlist('confirmed_items')
 
+    # Debugging: Print the confirmed items to check their format
+    print("Confirmed Items:", confirmed_items)
+
+    # Fetch existing items from the order
+    existing_items = order.get('items', [])
+
+    # Update only the confirmed items in the existing items array
+    for item_str in confirmed_items:
+        try:
+            # Replace single quotes with double quotes and False with false to make it valid JSON
+            item_str = item_str.replace("'", '"').replace("False", "false")
+            confirmed_item = json.loads(item_str)
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error for item: {item_str} - {str(e)}")
+            # Handle the error or skip this item
+            continue
+
+        for existing_item in existing_items:
+            if existing_item['ItemNumber'] == confirmed_item['ItemNumber']:
+                if request.user.is_rsr():
+                    existing_item['RSR_Conf'] = True
+                elif request.user.is_warehouse_worker():
+                    existing_item['WHA_Conf'] = True
+
+    # Debugging: Print the items array before updating the order
+    print("Items to be updated:", existing_items)
 
     if request.user.is_rsr():
         status = "RSR Confirmed"
     elif request.user.is_warehouse_worker():
         if order.get("route") in ship_to_routes:
-            status = "Shipping"
+            status = "WHA Approved: Ready to Ship"
         else:
-            status = "Ready for pick-up"
+            status = "WHA Approved: Ready for Pick-up"
 
     # Update the order with the confirmed items and set status
     result = collection.update_one(
         {'_id': ObjectId(order_id)},
-        {'$set': {'items': confirmed_items, 'status': status}}
+        {'$set': {'items': existing_items, 'status': status}}
     )
+
+    # Debugging: Check the result of the update operation
+    print("Update result:", result.modified_count)
 
     # Redirect based on the user's role
     if request.user.is_rsr():
@@ -1221,7 +1240,6 @@ def confirm_order_items(request, order_id):
     else:
         return render(request, "error_templates/forbidden.html",
                       {'message': "You do not have permission to confirm this order."}, status=403)
-
 
 @csrf_exempt
 def trigger_process_approval(request):
@@ -1311,9 +1329,118 @@ def warehouse_approval_detail_view(request, order_id):
 
     # Extract item numbers and fetch related data
     order_item_numbers = [item['ItemNumber'] for item in order.get('items', [])]
-    available_items = list(items_collection.find({'ItemNumber': {'$nin': order_item_numbers}}))
+    items = list(items_collection.find({'ItemNumber': {'$nin': order_item_numbers}}))
+
 
     return render(request, 'orders/rsr_order_detail.html', {
         'order': order,
-        'available_items': available_items,
+        'available_items': items,
     })
+
+
+@login_required
+@user_is_warehouse_worker
+def generate_approval_pdf(request, order_id):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    collection = db['approvals']
+    oos_items_collection = db['oos_items']
+    mapped_items_collection = db['mapped_items']
+
+
+    order = collection.find_one({'_id': ObjectId(order_id)})
+
+    # Fetch item ordering from the 'items' collection
+    items_ordering = fetch_item_ordering(client, 'mydatabase', 'items')
+
+    # Reorder the items in the order based on the 'Orderby' field
+    ordered_items = reorder_items(order.get('items', []), items_ordering)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="order_{order_id}.pdf"'
+
+    p = canvas.Canvas(response, pagesize=letter)
+    width, height = letter
+
+    # Initialize totals
+    total_quantity = 0
+    adjusted_total_quantity = 0
+
+    for item in ordered_items:
+        item_number = item.get('ItemNumber', '')
+        try:
+            quantity = int(item.get('Quantity', 0))
+            total_quantity += quantity  # Add to total quantity
+
+        except ValueError:
+            # Log error or handle the case where the quantity is not an integer
+            print(f"Warning: Invalid quantity '{item.get('Quantity')}' for item number {item_number}")
+
+    p.setFont("Helvetica-Bold", 12)
+    formatted_date = order.get('pick_up_date').strftime('%B %d, %Y')
+    p.drawString(30, height - 30, f"Approval: {formatted_date}")
+
+
+    p.setFont("Helvetica-Bold", 12)
+    route_number = order.get('route', 'N/A')
+    route_type = "Ship-to" if route_number in ship_to_routes else "Pick-up"
+    p.drawString(30, height - 50, f"Route Number: {route_number} ({route_type}) ")
+    p.setFont("Helvetica", 12)
+
+    # Move total quantity and related information to the top right
+    p.drawString(width - 300, height - 50, f"Total Quantity Ordered: {total_quantity}")
+
+
+    # Starting position adjustment for item list
+    y_position = height - 100
+
+    p.setFont("Helvetica-Bold", 12)
+    # Draw column headers, including a new column for 'Location'
+    p.drawString(30, y_position, "Item Number")
+    p.drawString(150, y_position, "Description")
+    p.drawString(300, y_position, "Quantity")  # New location column
+    p.drawString(375, y_position, "WHA")
+    p.drawString(450, y_position, "RSR")
+
+
+    # Revert to normal font for item details
+    p.setFont("Helvetica", 12)
+
+    # Adjust y_position for first item row
+    y_position -= 20
+
+    for item in ordered_items:
+        quantity = item.get('Quantity', 0)
+
+        # Skip items with no quantity or quantity set to 0
+        if not quantity:
+            continue
+
+        # Draw a line to separate this item from the next
+        p.line(30, y_position - 2, 580, y_position - 2)  # Adjust line length as needed
+
+        item_number = item.get('ItemNumber', 'Unknown')
+        description = item.get('ItemDescription', 'N/A')
+
+        # Drawing item details (keep this part unchanged)
+        p.drawString(30, y_position, str(item_number))
+        p.drawString(150, y_position, description)
+        p.drawString(315, y_position, str(quantity))
+
+
+        # Draw the placeholder box for adjustment quantity, stock status, and checkbox
+        p.rect(380, y_position - 2, 20, 15)
+        p.rect(450, y_position - 2, 20, 15)
+
+        # Move to the next line
+        y_position -= 20
+
+        # Check if we need to start a new page
+        if y_position < 50:
+            p.showPage()
+            y_position = height - 50
+
+    p.setTitle(route_number)
+    p.showPage()
+    p.save()
+    return response
