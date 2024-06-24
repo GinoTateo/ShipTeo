@@ -25,15 +25,25 @@
                 {% if user.is_warehouse_worker %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Warehouse
+                        Orders
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
                         <li><a class="dropdown-item" href="/ops/warehouse/dashboard/">Dashboard</a></li>
                         <li><a class="dropdown-item" href="/ops/warehouse/order/">Orders</a></li>
                         <li><a class="dropdown-item" href="/ops/warehouse/approval/">Approvals</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/order/create/">Create</a></li>
+                    </ul>
+                </li>
+                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Operations
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+                        <li><a class="dropdown-item" href="/ops/warehouse/dashboard/">Dashboard</a></li>
                         <li><a class="dropdown-item" href="/ops/warehouse/inventory/">Inventory</a></li>
                         <li><a class="dropdown-item" href="/ops/warehouse/runrates/">Run Rates</a></li>
-                        <li><a class="dropdown-item" href="/ops/warehouse/order/create/">Create</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/builder/dashboard/">Builder</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/inventory/physical/">Physical</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/inventory/comparison/">Comparison</a></li>
                     </ul>
                 </li>
                 {% endif %}

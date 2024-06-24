@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Inventory Comparison</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container {max-width: 1200px; margin: auto; padding: 20px;}
+        .card {border: none; box-shadow: 0 0 15px rgba(0, 0, 0, 0.1); border-radius: 10px; padding: 20px; margin-bottom: 20px; transition: transform 0.3s ease;}
+        .card:hover {transform: translateY(-5px);}
+        .card h2 {margin-top: 0; color: #007bff;}
+        .text-green {color: green;}
+        .text-red {color: red;}
+    </style>
+</head>
+<body>
+    {% include 'navbar.html' %}
+    <div class="container">
+        <div class="card">
+            <div class="card-body">
+                <h1 class="my-4">Inventory Comparison</h1>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Cases</th>
+                            <th>Physical</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in inventory_items %}
+                            <tr>
+                                <td>{{ item.ItemName }}</td>
+                                <td>{{ item.Cases }}</td>
+                                <td class="{% if item.Physical < item.Cases %}text-red{% elif item.Physical > item.Cases %}text-green{% endif %}">
+                                    {{ item.Physical }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th>Total</th>
+                            <th>{{ total_cases }}</th>
+                            <th>{{ total_physical }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

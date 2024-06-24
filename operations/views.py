@@ -28,7 +28,6 @@ from operations.Order_Backend import order_main
 from django.core.paginator import Paginator
 
 # Constants
-# MONGO_URI = "mongodb+srv://gjtat901:koxbi2-kijbas-qoQzad@cluster0.abxr6po.mongodb.net/?retryWrites=true&w=majority"
 
 load_dotenv()  # This method will load variables from a .env file
 
@@ -988,13 +987,15 @@ def update_builder(request, order_id):
         try:
             data = json.loads(request.body)
             builder_name = data.get('builder_name')
+            start_time = datetime.now()
+
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': 'Missing builder_name' + e}, status=400)
 
         # Perform the update
         result = collection.update_one(
             {'_id': ObjectId(order_id)},
-            {'$set': {'status': "Preparing", 'builder_name': builder_name}}
+            {'$set': {'status': "Preparing", 'builder_name': builder_name, 'start_time': start_time}}
         )
 
         if result.modified_count == 1:
@@ -1444,3 +1445,150 @@ def generate_approval_pdf(request, order_id):
     p.showPage()
     p.save()
     return response
+
+
+@login_required
+@user_is_warehouse_worker
+def physical_inventory_view(request):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    inventory_collection = db['inventory']
+
+    # Fetch the most recent inventory document
+    most_recent_inventory = inventory_collection.find_one(sort=[("timestamp", -1)])
+
+    # Fetch item ordering from the 'items' collection
+    items_ordering = fetch_item_ordering(client, 'mydatabase', 'items')
+
+    # Reorder the items in the order based on the 'Orderby' field
+    ordered_items = reorder_items(most_recent_inventory.get('items', []), items_ordering)
+
+    if request.method == 'POST':
+        if most_recent_inventory:
+            items = ordered_items
+            for key, value in request.POST.items():
+                if key.startswith('quantity_'):
+                    item_number = key.split('_')[1]
+                    try:
+                        physical_quantity = int(value)
+                    except ValueError as e:
+                        print(f"Invalid quantity value '{value}' for item_number '{item_number}': {e}")
+                        continue  # Skip invalid quantities
+
+                    # Find the specific item in the items array
+                    for item in items:
+                        if item['ItemNumber'] == item_number:
+                            item['Physical'] = physical_quantity
+                            break
+
+            # Update the inventory document with the modified items array
+            result = inventory_collection.update_one(
+                {'_id': most_recent_inventory['_id']},
+                {'$set': {'items': items}}
+            )
+
+            # Debug: Print the result of the update operation
+            print(f"Update result for inventory_id '{most_recent_inventory['_id']}': {result.modified_count} document(s) updated.")
+
+        return redirect('ops:inventory_comparison')  # Redirect to the same page after submission
+
+    return render(request, 'inventory/physical_inventory.html', {
+        'inventory_items': most_recent_inventory
+    })
+
+
+@login_required
+@user_is_warehouse_worker
+def builder_report_view(request):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    orders_collection = db['orders']
+
+    # Determine the time range based on user selection
+    time_range = request.GET.get('time_range', 'all')
+    now = datetime.now()
+
+    if time_range == 'day':
+        start_date = now - timedelta(days=1)
+    elif time_range == 'week':
+        start_date = now - timedelta(weeks=1)
+    elif time_range == 'month':
+        start_date = now - timedelta(days=30)
+    elif time_range == 'year':
+        start_date = now - timedelta(days=365)
+    else:
+        start_date = None
+
+    match_stage = {}
+    if start_date:
+        match_stage = {
+            '$match': {
+                'pick_up_date': {'$gte': start_date}
+            }
+        }
+
+    # Aggregate the total cases by builder_name
+    pipeline = [
+        match_stage,
+        {
+            '$group': {
+                '_id': '$builder_name',
+                'total_cases': {'$sum': {'$toInt': '$total_cases'}},
+                'orders_count': {'$sum': 1}
+            }
+        },
+        {
+            '$sort': {'total_cases': -1}
+        }
+    ]
+
+    # Remove the match stage if it's empty (i.e., for 'all' time range)
+    if not match_stage:
+        pipeline.pop(0)
+
+    builder_stats = list(orders_collection.aggregate(pipeline))
+
+    # Calculate total cases across all builders
+    total_cases = sum(stat['total_cases'] for stat in builder_stats)
+
+    # Preprocess data to rename keys and calculate percentages
+    processed_stats = []
+    for stat in builder_stats:
+        processed_stats.append({
+            'builder_name': stat['_id'],
+            'total_cases': stat['total_cases'],
+            'orders_count': stat['orders_count'],
+            'case_percentage': (stat['total_cases'] / total_cases) * 100 if total_cases > 0 else 0
+        })
+
+    return render(request, 'orders/builder_dashboard.html', {
+        'builder_stats': processed_stats,
+        'time_range': time_range,
+    })
+
+
+@login_required
+@user_is_warehouse_worker
+def inventory_comparison_view(request):
+    client = MongoConnection.get_client()
+    db = client['mydatabase']
+    inventory_collection = db['inventory']
+
+    # Fetch the most recent inventory document
+    most_recent_inventory = inventory_collection.find_one(sort=[("timestamp", -1)])
+
+    # Process items to ensure Cases and Physical are integers
+    items = most_recent_inventory.get('items', [])
+    for item in items:
+        item['Cases'] = int(item.get('Cases', 0))
+        item['Physical'] = int(item.get('Physical', 0))
+
+    # Calculate totals
+    total_cases = sum(item['Cases'] for item in items)
+    total_physical = sum(item['Physical'] for item in items)
+
+    return render(request, 'inventory/inventory_comparison.html', {
+        'inventory_items': items,
+        'total_cases': total_cases,
+        'total_physical': total_physical,
+    })

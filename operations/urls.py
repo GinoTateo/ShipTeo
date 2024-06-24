@@ -38,6 +38,8 @@ urlpatterns = [
 
     # Inventory
     path('warehouse/inventory/', views.inventory_view, name='inventory'),
+    path('warehouse/inventory/physical/', views.physical_inventory_view, name='physical_inventory'),
+    path('warehouse/inventory/comparison/', views.inventory_comparison_view, name='inventory_comparison'),
     path('warehouse/runrates/', views.inventory_with_6week_avg, name='run_rates'),
     path('warehouse/trends/<str:item_type>/', views.weekly_trend_view, name='trends'),
     path('warehouse/comparison/', views.comparison_across_weeks_view, name='comparison'),
@@ -63,5 +65,7 @@ urlpatterns = [
 
     # Warehouse Order picker
     path('warehouse/order/picker/<str:order_id>/', views.order_picker, name='order_picker_view'),
+    path('warehouse/builder/dashboard/', views.builder_report_view, name='builder_report'),
+
 
 ]

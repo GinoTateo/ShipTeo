@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physical Inventory</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container { max-width: 900px; margin: auto; padding: 20px; }
+        .card { margin-bottom: 20px; }
+        .card-header { background-color: #007bff; color: white; cursor: pointer; }
+        .card-body { background-color: #f8f9fa; }
+        .btn-primary { background-color: #007bff; border: none; }
+        .collapsed-card-header { color: white; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+{% include 'navbar.html' %}
+
+<div class="container mt-3">
+    <h1 class="mb-4">Physical Inventory</h1>
+
+    <form method="post" class="mb-3">
+        {% csrf_token %}
+        <div id="accordion">
+            {% for item in inventory_items.items %}
+                <div class="card">
+                    <div class="card-header">
+                        <a class="collapsed-card-header" data-toggle="collapse" href="#collapse{{ forloop.counter }}" aria-expanded="true" aria-controls="collapse{{ forloop.counter }}">
+                            <h2 class="mb-0 text-primary">{{ item.ItemName }}</h2>
+                        </a>
+                    </div>
+
+                    <div id="collapse{{ forloop.counter }}" class="collapse" aria-labelledby="heading{{ forloop.counter }}" data-parent="#accordion">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>{{ item.ItemName }}</strong> <br>
+                                    <small>Item Number: {{ item.id }}</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="quantity_{{ item.ItemNumber }}">Quantity:</label>
+                                    <input type="number" id="quantity_{{ item.ItemNumber }}" name="quantity_{{ item.ItemNumber }}" min="0" class="form-control" value="{{ item.Cases }}">
+                                    <input type="hidden" name="description_{{ item.ItemNumber }}" value="{{ item.ItemName }}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="btn btn-primary mt-3">Submit Physical Inventory</button>
+    </form>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.min.js"></script>
+
+</body>
+</html>
