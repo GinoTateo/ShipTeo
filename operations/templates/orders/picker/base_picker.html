@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pick Page</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- jQuery and Bootstrap JS -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+    <!-- Quagga JS for barcode scanning -->
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Pick Order</h1>
+        <div id="scanner-container"></div> <!-- Barcode scanner container -->
+        <div class="info">
+            <h3 id="bay-location">Bay Location: <span id="bayName"></span></h3>
+            <button id="startScanner" class="btn btn-primary">Start Scanner</button>
+        </div>
+        <div class="alert alert-info" role="alert" id="scanResult">
+            Please scan the bay location.
+        </div>
+    </div>
+
+<script>
+    try {
+        var items = JSON.parse('{{ order_items | safe }}' || '[]');
+        console.log('Items:', items);  // This should always print something, even if items are an empty array
+    } catch (e) {
+        console.error('Error parsing items:', e);
+    }
+</script>
+<script src="{% static 'Scripts/js/scanner.js' %}"></script>
+</body>
+</html>
+

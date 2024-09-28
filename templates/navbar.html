@@ -21,39 +21,59 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNavDropdown">
-            <ul class="navbar-nav">
-                <!-- Warehouse Dropdown -->
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                {% if user.is_warehouse_worker %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        Warehouse
+                        Orders
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
                         <li><a class="dropdown-item" href="/ops/warehouse/dashboard/">Dashboard</a></li>
                         <li><a class="dropdown-item" href="/ops/warehouse/order/">Orders</a></li>
-                        <li><a class="dropdown-item" href="/ops/warehouse/inventory/">Inventory</a></li>
-                        <li><a class="dropdown-item" href="/ops/warehouse/runrates/">Run Rates</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/approval/">Approvals</a></li>
                         <li><a class="dropdown-item" href="/ops/warehouse/order/create/">Create</a></li>
                     </ul>
                 </li>
-                <!-- Additional Nav Links Here -->
+                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Operations
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+                        <li><a class="dropdown-item" href="/ops/warehouse/dashboard/">Dashboard</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/inventory/">Inventory</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/runrates/">Run Rates</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/builder/dashboard/">Builder</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/inventory/physical/">Physical</a></li>
+                        <li><a class="dropdown-item" href="/ops/warehouse/inventory/comparison/">Comparison</a></li>
+                    </ul>
+                </li>
+                {% endif %}
                 {% if user.is_merch %}
                 <li class="nav-item"><a class="nav-link" href="/merch/dashboard">Merch</a></li>
                 {% endif %}
                 {% if user.is_rsr %}
                 <li class="nav-item"><a class="nav-link" href="/ops/warehouse/order/rsr/view/">Route</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/ops/warehouse/order/create/">Create</a></li>
+                {% endif %}
+                {% if user.is_authenticated %}
+                <!-- Mobile Logout Link -->
+                <li class="nav-item d-lg-none">
+                    <a class="nav-link" href="/logout">Logout</a>
+                </li>
                 {% endif %}
             </ul>
-            <!-- Authentication Links -->
             {% if user.is_authenticated %}
-            <div class="dropdown ms-auto">
-                <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                    Account
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton">
-                    <li><a class="dropdown-item" href="{% url 'account:view' user_id=user.id %}">Settings</a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="/logout">Logout</a></li>
-                </ul>
+            <!-- Desktop Account Dropdown -->
+            <div class="d-none d-lg-block ms-lg-auto">
+                <div class="dropdown">
+                    <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                        Account
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton">
+                        <li><a class="dropdown-item" href="{% url 'account:view' user_id=user.id %}">Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/logout">Logout</a></li>
+                    </ul>
+                </div>
             </div>
             {% else %}
             <div class="ms-auto">

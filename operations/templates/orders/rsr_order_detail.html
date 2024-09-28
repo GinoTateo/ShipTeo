@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pick List</title>
-    <!-- Bootstrap CSS for styling and components -->
+    <title>Approval Form</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <!-- Bootstrap Bundle with Popper for dropdowns, modals, etc. -->
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
 </head>
 
@@ -19,8 +17,19 @@
                 <h2 class="card-title">{{ order.route }}</h2>
                 <h4 class="card-subtitle mb-2 text-muted">{{ order.pick_up_date|date:"F j, Y" }}</h4>
                 <p><strong>Total Items:</strong> {{ order.total_cases }}</p>
-                <p><strong>Builder:</strong> {{ order.builder_name }}</p>
-                <p><strong>Status:</strong> <span class="{% if order.status == 'Complete' %}badge badge-success{% elif order.status == 'Preparing' %}badge badge-info{% else %}badge badge-secondary{% endif %}">{{ order.status }}</span></p>
+                <p><strong>Status:</strong> <span class="{% if order.status == 'Confirmed' %}badge badge-success{% elif order.status == 'Ready for pick-up' %}badge badge-info{% else %}badge badge-secondary{% endif %}">{{ order.status }}</span></p>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="/ops/warehouse/approval/" class="btn btn-danger">Back</a>
+                    <div class="dropdown">
+                        <button class="btn btn-primary dropdown-toggle" type="button" id="actionMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu" aria-labelledby="actionMenuButton">
+                            <a class="dropdown-item" href="pdf/">PDF</a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -30,21 +39,34 @@
                 <div class="row">
                     {% for item in order.items %}
                         {% if item.Quantity > 0 %}
-                    <div class="col-md-4 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">{{ item.ItemDescription }}</h5>
-                                <p class="mb-2">Item Number: {{ item.ItemNumber }}</p>
-                                <p class="mb-2">Quantity: {{ item.Quantity }}</p> <!-- Quantity displayed as text -->
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="" id="itemCheck_{{ forloop.counter0 }}">
-                                    <label class="form-check-label" for="itemCheck_{{ forloop.counter0 }}">
-                                        Confirm Item
-                                    </label>
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ item.ItemDescription }}</h5>
+                                        <p class="mb-2">Item Number: {{ item.ItemNumber }}</p>
+                                        <p class="mb-2">Quantity: {{ item.Quantity }}</p> <!-- Quantity displayed as text -->
+                                        {% if not item.Confirmed %}
+                                            <div class="form-check">
+                                            {% if not item.WHA_Conf %}
+                                                <input class="form-check-input" type="checkbox" name="confirmed_items" value="{{ item }}" id="itemCheck_{{ forloop.counter0 }}">
+                                                <label class="form-check-label" for="itemCheck_{{ forloop.counter0 }}">Confirm</label>
+                                            {% elif not item.RSR_Conf %}
+                                                <input class="form-check-input" type="checkbox" name="confirmed_items" value="{{ item }}" id="itemCheck_{{ forloop.counter0 }}">
+                                                <label class="form-check-label" for="itemCheck_{{ forloop.counter0 }}">Confirm</label>
+                                            {% elif item.RSR_Conf and item.WHA_Conf %}
+                                                <p><strong>Status:</strong> <span class="badge badge-success' ">RSR & WHA Confirmed</span></p>
+                                            {% elif item.RSR_Conf %}
+                                                <p><strong>Status:</strong> <span class="badge badge-success' ">RSR Confirmed</span></p>
+                                            {% elif item.WHA_Conf %}
+                                                <p><strong>Status:</strong> <span class="badge badge-success' ">WHA Confirmed</span></p>
+                                            {% endif %}
+                                            </div>
+                                        {% elif item.Confirmed %}
+                                            <p class="text-success">Confirmed</p>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
                         {% endif %}
                     {% endfor %}
                 </div>

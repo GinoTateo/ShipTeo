@@ -154,7 +154,7 @@ def identify_and_upload_oos_items(client):
                 # Adding only relevant fields to OOS items list
                 item_number = int(float(item['ItemNumber']))  # Convert to float first, then to int to handle .0
                 oos_item = {
-                    'ItemNumber': str(item_number),  # Convert integer back to string
+                    'ItemNumber': item_number,  # Convert integer back to string
                     'ItemDescription': item.get('ItemDescription', ''),
                 }
                 oos_items.append(oos_item)

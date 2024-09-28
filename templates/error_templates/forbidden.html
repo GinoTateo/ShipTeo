@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forbidden</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f8f9fa; /* Lighter background */
+            color: #333; /* Darker text for better readability */
+        }
+        .container {
+            max-width: 600px;
+            margin-top: 50px;
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Soft box shadow */
+        }
+        h1 {
+            font-size: 48px; /* Smaller font size for better fit */
+            color: #dc3545; /* Bootstrap danger color */
+        }
+        p {
+            font-size: 18px; /* Smaller font for paragraph */
+        }
+        a {
+            color: #007bff; /* Bootstrap primary link color */
+        }
+    </style>
+</head>
+<body>
+{% include 'navbar.html' %}
+    <div class="container text-center">
+        <h1>Forbidden</h1>
+        <p>{{ message }}</p>
+        <a href="/" class="btn btn-primary">Go to Home Page</a> <!-- Added button to navigate home -->
+    </div>
+</body>
+</html>

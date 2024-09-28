@@ -10,7 +10,6 @@ ShipTeo is an online platform that empowers businesses to manage their logistics
 
 - **Order Management:** Simplify order entries, automate processing, and update statuses in real-time.
 - **Inventory Management:** Keep track of inventory levels, receive alerts for low stock, and manage reordering effortlessly.
-- **Shipping Coordination:** Seamless integration with major shipping carriers to provide real-time updates and tracking.
 - **Analytics and Reporting:** Access insightful analytics and detailed reports to make data-driven decisions and optimize operations.
 
 ## Live Application

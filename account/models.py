@@ -56,6 +56,8 @@ TITLE = (
     ('RM', 'Regional Manager'),
     ('DM', 'Division Manager'),
     ('WHM', 'Warehouse Manager'),
+    ('WHS', 'Warehouse Supervisor'),
+    ('WHA', 'Warehouse Associate'),
 )
 
 
@@ -92,19 +94,58 @@ class Account(AbstractBaseUser):
     def has_module_perms(self, app_label):
         return True
 
-    def is_merch(self):
-        if self.title == "Merch":
+    def is_rsr(self):
+        if self.title == 'RSR':
             return True
         else:
             return False
 
-    def is_rsr(self):
-        if self.title == "RSR":
+    def is_merch(self):
+        if self.title == 'Merch':
             return True
         else:
             return False
+
+    def is_regional_manager(self):
+        if self.title == 'RM':
+            return True
+        else:
+            return False
+
+    def is_division_manager(self):
+        if self.title == 'DM':
+            return True
+        else:
+            return False
+
+    def is_warehouse_manager(self):
+        if self.title == 'WHM':
+            return True
+        else:
+            return False
+
+    def is_warehouse_supervisor(self):
+        if self.title == 'WHS':
+            return True
+        else:
+            return False
+
+    def is_warehouse_associate(self):
+        if self.title == 'WHA':
+            return True
+        else:
+            return False
+
+    def is_warehouse_worker(self):
+        if self.title in ['WHM', 'WHS', 'WHA']:
+            return True
+        else:
+            return False
+
 
     @receiver(post_save, sender=settings.AUTH_USER_MODEL)
     def create_auth_token(sender, instance=None, created=False, **kwargs):
         if created:
             Token.objects.create(user=instance)
+
+
